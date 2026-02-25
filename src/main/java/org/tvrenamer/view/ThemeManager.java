@@ -1,5 +1,6 @@
 package org.tvrenamer.view;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.logging.Level;
@@ -35,8 +36,46 @@ public final class ThemeManager {
 
     private static final Duration DETECTION_TIMEOUT = Duration.ofSeconds(1);
 
+    /**
+     * Whether native Windows dark mode was successfully activated via OS.setTheme().
+     * When true, manual workarounds (e.g., button border overlay painting) are skipped
+     * because the native rendering already handles them correctly.
+     */
+    private static volatile boolean nativeDarkModeActive = false;
+
     private ThemeManager() {
         // Utility class
+    }
+
+    /**
+     * Apply native OS-level dark/light theming based on the resolved mode.
+     * Must be called AFTER Display creation but BEFORE creating any widgets (Shell, etc.)
+     * so that all subsequently created native controls inherit the correct theme.
+     *
+     * <p>On Windows, this uses SWT's internal {@code OS.setTheme(boolean)} via reflection
+     * to activate the Windows dark mode API for menus, buttons, tabs, scrollbars, and title bar.
+     * On other platforms or if the API is unavailable, this is a silent no-op and manual
+     * theming continues as the fallback.</p>
+     *
+     * @param resolved the resolved theme mode (DARK or LIGHT; never AUTO)
+     */
+    public static void applyNativeTheme(ThemeMode resolved) {
+        if (!Environment.IS_WINDOWS) {
+            return;
+        }
+        boolean dark = (resolved == ThemeMode.DARK);
+        try {
+            Class<?> osClass = Class.forName("org.eclipse.swt.internal.win32.OS");
+            Method setTheme = osClass.getMethod("setTheme", boolean.class);
+            setTheme.invoke(null, dark);
+            nativeDarkModeActive = dark;
+            logger.fine("Native Windows dark mode " + (dark ? "enabled" : "disabled")
+                        + " via OS.setTheme()");
+        } catch (Exception e) {
+            nativeDarkModeActive = false;
+            logger.log(Level.FINE,
+                        "OS.setTheme() not available; using manual theming only", e);
+        }
     }
 
     /**
@@ -111,8 +150,9 @@ public final class ThemeManager {
         }
 
         // Best-effort border polish for dark mode.
-        // SWT native widgets draw their own borders; this only helps where SWT allows custom painting.
-        if (palette.isDark()) {
+        // When native dark mode is active (OS.setTheme), the OS renders proper dark borders
+        // and our overlay PaintListener becomes unnecessary (and potentially harmful).
+        if (palette.isDark() && !nativeDarkModeActive) {
             if (control instanceof Button button) {
                 installButtonBorderPainter(button, palette);
             }
@@ -126,18 +166,18 @@ public final class ThemeManager {
     }
 
     /**
-     * Best-effort menu theming.
+     * Menu theming stub.
      *
-     * SWT menus are typically OS-native:
-     * - Some SWT versions/platforms don't expose public setters for menu colors.
-     * - Even when setters exist, native theming may ignore them.
+     * On Windows with SWT 3.132+, menu dark mode is handled natively by
+     * {@link #applyNativeTheme(ThemeMode)} via {@code OS.setTheme(true)}, which activates
+     * owner-drawn dark menu rendering. No per-menu colour work is needed.
      *
-     * So this is intentionally a no-op for compatibility; theming is handled via the owning
-     * {@link Shell} and control palette application elsewhere.
+     * On other platforms or older SWT versions, menus remain OS-native and typically
+     * ignore programmatic colour changes, so this remains a no-op.
      */
     public static void applyPalette(Object unusedMenu, ThemePalette palette) {
-        // Intentionally empty (best-effort only; keep API surface to avoid churn).
-        // We accept an Object to avoid coupling to SWT Menu APIs that vary by SWT version.
+        // Intentionally empty — menu theming is handled by applyNativeTheme() on Windows,
+        // and is not controllable on other platforms.
     }
 
     private static void installTabFolderHeaderTheming(

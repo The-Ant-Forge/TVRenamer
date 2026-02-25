@@ -22,6 +22,8 @@ import org.eclipse.swt.widgets.Monitor;
 import org.eclipse.swt.widgets.Shell;
 import org.tvrenamer.controller.HelpLauncher;
 import org.tvrenamer.controller.UrlLauncher;
+import org.tvrenamer.model.ThemeMode;
+import org.tvrenamer.model.UserPreferences;
 import org.tvrenamer.model.util.Environment;
 
 public final class UIStarter {
@@ -252,15 +254,17 @@ public final class UIStarter {
 
             helpMenu = setupHelpMenuBar(menuBarMenu);
         } else {
-            // Add the normal Preferences, About and Quit menus.
-            MenuItem fileMenuItem = new MenuItem(menuBarMenu, SWT.CASCADE);
-            fileMenuItem.setText("File");
+            // Preferences is the most-used menu action, so it gets its own
+            // top-level menu bar entry for quick access.
+            MenuItem prefsMenuItem = new MenuItem(menuBarMenu, SWT.CASCADE);
+            prefsMenuItem.setText(PREFERENCES_LABEL);
 
-            Menu fileMenu = new Menu(shell, SWT.DROP_DOWN);
-            fileMenuItem.setMenu(fileMenu);
+            Menu prefsMenu = new Menu(shell, SWT.DROP_DOWN);
+            prefsMenuItem.setMenu(prefsMenu);
 
-            makeMenuItem(fileMenu, PREFERENCES_LABEL, preferencesListener, 'P');
-            makeMenuItem(fileMenu, EXIT_LABEL, quitListener, 'Q');
+            makeMenuItem(prefsMenu, PREFERENCES_LABEL, preferencesListener, 'P');
+            new MenuItem(prefsMenu, SWT.SEPARATOR);
+            makeMenuItem(prefsMenu, EXIT_LABEL, quitListener, 'Q');
 
             helpMenu = setupHelpMenuBar(menuBarMenu);
 
@@ -298,6 +302,12 @@ public final class UIStarter {
             // SWT can fail very early with an Error (not Exception) if the native layer cannot be loaded.
             // We want to capture *all* of those failures in tvrenamer.log, not just stdout/stderr.
             display = new Display();
+
+            // Activate native OS-level dark/light theming before any widgets are created.
+            // On Windows this calls OS.setTheme() for native dark menus, buttons, tabs, etc.
+            UserPreferences prefs = UserPreferences.getInstance();
+            ThemeMode resolved = ThemeManager.resolveTheme(prefs.getThemeMode());
+            ThemeManager.applyNativeTheme(resolved);
 
             themePalette = ThemeManager.createPalette(display);
 
