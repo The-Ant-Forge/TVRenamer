@@ -88,7 +88,7 @@ in `build.gradle` can be removed — they're harmless but unnecessary after that
 
 ---
 
-## Dependency Status (February 2026)
+## Dependency Status (March 2026)
 
 | Dependency | Version | Latest Available | Status |
 |------------|---------|------------------|--------|

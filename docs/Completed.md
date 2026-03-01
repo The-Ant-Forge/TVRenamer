@@ -638,6 +638,32 @@ Completes the code improvement opportunities document (all 24 items done).
   calls (`.getOption()` → `.option()`, `.getScore()` → `.score()`) across 3 files.
   `ShowOption` and `Decision` were left as classes (subclass hierarchy / complex factory methods).
 
+### 49) Native Windows dark mode via OS.setTheme()
+- **Why:** Dark mode previously used manual `setBackground`/`setForeground` calls, which left
+  native widgets (menu bar, button borders, tab headers, scrollbars) in their default light
+  appearance — bright white borders clashing with dark content areas.
+- **Where:** `ThemeManager.java`, `UIStarter.java`
+- **What we did:**
+  - Added `applyNativeTheme(ThemeMode)` to `ThemeManager` — uses reflection to call
+    `org.eclipse.swt.internal.win32.OS.setTheme(boolean)`, the same API Eclipse IDE uses.
+  - Called from `UIStarter` after `Display` creation but before any widgets are created.
+  - Added `nativeDarkModeActive` flag; when true, the manual button border overlay
+    (`installButtonBorderPainter`) is skipped to avoid double-painting.
+  - Graceful fallback: if reflection fails (older SWT, non-Windows), manual theming continues.
+- **Notes:** Requires SWT 3.132.0+. Tab folder headers in Preferences still appear light
+  (SWT `TabFolder` limitation on Windows), but all other native widgets are properly dark.
+
+### 50) Promote Preferences to top-level menu bar entry
+- **Why:** Preferences was the most-used menu item but buried under File → Preferences.
+- **Where:** `UIStarter.java` (`setupMenuBar()`)
+- **What we did:**
+  - Replaced the "File" cascade menu with a "Preferences" cascade menu on the menu bar.
+  - Dropdown contains: Preferences (Ctrl+P), separator, Exit (Ctrl+Q).
+  - macOS behaviour unchanged (uses native application menu via `CocoaUIEnhancer`).
+  - Updated all help pages (`index.html`, `preferences.html`, `getting-started.html`,
+    `adding-files.html`) to reflect the new menu structure.
+  - Removed references to a non-existent "File → Add Files" menu item from help.
+
 ---
 
 ## Related records
