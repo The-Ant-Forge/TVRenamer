@@ -1,6 +1,6 @@
 [versions]
 # Tooling / plugins
-shadow = "9.3.1"
+shadow = "9.3.2"
 launch4j = "4.0.0"
 
 # Runtime dependencies

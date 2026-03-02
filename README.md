@@ -1,5 +1,5 @@
 # TVRenamer
-[![Windows Build](https://github.com/StephKoenig/TVRenamer/actions/workflows/windows-build.yml/badge.svg?branch=master)](https://github.com/StephKoenig/TVRenamer/actions/workflows/windows-build.yml?query=branch%3Amaster)
+[![Windows Build](https://github.com/The-Ant-Forge/TVRenamer/actions/workflows/windows-build.yml/badge.svg?branch=master)](https://github.com/The-Ant-Forge/TVRenamer/actions/workflows/windows-build.yml?query=branch%3Amaster)
 ![Windows x64](https://img.shields.io/badge/Windows-x64-blue)
 ![Java](https://img.shields.io/badge/Java-17%2B-blue)
 
