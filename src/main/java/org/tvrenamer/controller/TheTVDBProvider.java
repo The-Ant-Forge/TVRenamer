@@ -7,6 +7,9 @@ import static org.tvrenamer.model.util.Constants.*;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.xml.parsers.DocumentBuilder;
@@ -37,10 +40,10 @@ public class TheTVDBProvider {
     private static final String API_KEY = "4A9560FF0B2670B2";
 
     // Whether or not we should try making v1 API calls
-    private static boolean apiIsDeprecated = false;
+    private static volatile boolean apiIsDeprecated = false;
 
     // The base information for the provider
-    private static final String DEFAULT_SITE_URL = "http://thetvdb.com/";
+    private static final String DEFAULT_SITE_URL = "https://thetvdb.com/";
     private static final String API_URL = DEFAULT_SITE_URL + "api/";
 
     // The URL to get, to receive options for a given series search string.
@@ -70,11 +73,8 @@ public class TheTVDBProvider {
     private static final String XPATH_EPISODE_NUM = "EpisodeNumber";
     private static final String XPATH_EPISODE_NAME = "EpisodeName";
     private static final String XPATH_AIRDATE = "FirstAired";
-    // private static final String XPATH_EPISODE_SERIES_ID = "seriesid";
     private static final String XPATH_DVD_SEASON_NUM = "DVD_season";
     private static final String XPATH_DVD_EPISODE_NUM = "DVD_episodenumber";
-
-    // private static final String XPATH_EPISODE_NUM_ABS = "absolute_number";
 
     private static String getShowSearchXml(final String queryString)
         throws TVRenamerIOException, DiscontinuedApiException {
@@ -134,15 +134,13 @@ public class TheTVDBProvider {
             }
 
             String aliasNamesRaw = nodeTextValue(XPATH_ALIAS_NAMES, eNode);
-            java.util.List<String> aliasNames =
-                java.util.Collections.emptyList();
+            List<String> aliasNames = Collections.emptyList();
             if (aliasNamesRaw != null) {
                 String trimmed = aliasNamesRaw.trim();
                 if (!trimmed.isEmpty()) {
                     // TVDB v1 often returns pipe-delimited alias lists like: |Alias A|Alias B|
                     String[] parts = trimmed.split("\\|");
-                    java.util.ArrayList<String> aliases =
-                        new java.util.ArrayList<>();
+                    ArrayList<String> aliases = new ArrayList<>();
                     for (String p : parts) {
                         String a = p.trim();
                         if (!a.isEmpty()) {
@@ -150,9 +148,7 @@ public class TheTVDBProvider {
                         }
                     }
                     if (!aliases.isEmpty()) {
-                        aliasNames = java.util.Collections.unmodifiableList(
-                            aliases
-                        );
+                        aliasNames = Collections.unmodifiableList(aliases);
                     }
                 }
             }
@@ -193,6 +189,35 @@ public class TheTVDBProvider {
         }
     }
 
+    /**
+     * Create a DocumentBuilder with XXE (external entity) processing disabled.
+     * Since the XML comes from an external network source, this is a security
+     * precaution against XXE attacks.
+     */
+    private static DocumentBuilder createDocumentBuilder()
+        throws TVRenamerIOException {
+        try {
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            dbf.setFeature(
+                "http://apache.org/xml/features/disallow-doctype-decl", true
+            );
+            dbf.setFeature(
+                "http://xml.org/sax/features/external-general-entities", false
+            );
+            dbf.setFeature(
+                "http://xml.org/sax/features/external-parameter-entities", false
+            );
+            return dbf.newDocumentBuilder();
+        } catch (ParserConfigurationException e) {
+            logger.log(
+                Level.WARNING,
+                "could not create DocumentBuilder: " + e.getMessage(),
+                e
+            );
+            throw new TVRenamerIOException(ERROR_PARSING_XML, e);
+        }
+    }
+
     private static synchronized boolean isApiDiscontinuedError(Throwable e) {
         if (apiIsDeprecated) {
             return true;
@@ -223,17 +248,7 @@ public class TheTVDBProvider {
         // (e.g., add/remove cycles) don't append duplicates into the resolve dialog.
         showName.clearShowOptions();
 
-        DocumentBuilder bld;
-        try {
-            bld = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-        } catch (ParserConfigurationException e) {
-            logger.log(
-                Level.WARNING,
-                "could not create DocumentBuilder: " + e.getMessage(),
-                e
-            );
-            throw new TVRenamerIOException(ERROR_PARSING_XML, e);
-        }
+        DocumentBuilder bld = createDocumentBuilder();
 
         String searchXml = "";
         try {
@@ -276,17 +291,7 @@ public class TheTVDBProvider {
         throws TVRenamerIOException {
         NodeList episodeList;
 
-        DocumentBuilder dbf;
-        try {
-            dbf = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-        } catch (ParserConfigurationException e) {
-            logger.log(
-                Level.WARNING,
-                "could not create DocumentBuilder: " + e.getMessage(),
-                e
-            );
-            throw new TVRenamerIOException(ERROR_PARSING_XML, e);
-        }
+        DocumentBuilder dbf = createDocumentBuilder();
 
         try {
             String listingsXml = getSeriesListingXml(series);

@@ -182,6 +182,10 @@ public class EpisodeDb implements java.beans.PropertyChangeListener {
         final Queue<FileEpisode> contents,
         final Path path
     ) {
+        if (!Files.isRegularFile(path)) {
+            logger.fine("skipping non-regular file: " + path);
+            return;
+        }
         final String key = canonicalizeKey(path);
         if (episodes.containsKey(key)) {
             logger.info("already in table: " + key);

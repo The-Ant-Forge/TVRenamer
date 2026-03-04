@@ -116,4 +116,20 @@ public class ItemState {
         }
         return state.ordering;
     }
+
+    /**
+     * Register all static ItemState images for disposal when the Display is shut down.
+     * Must be called once after the Display is created.
+     *
+     * @param display the SWT Display to register with
+     */
+    public static void registerDisposal(org.eclipse.swt.widgets.Display display) {
+        display.disposeExec(() -> {
+            for (ItemState state : STANDARD_STATUSES) {
+                if (state.image != null && !state.image.isDisposed()) {
+                    state.image.dispose();
+                }
+            }
+        });
+    }
 }

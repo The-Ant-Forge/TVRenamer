@@ -53,7 +53,7 @@ public class Series extends Show {
      *     The ID of this show, from the provider, as a String
      * @return a Series with the given ID
      */
-    public static synchronized Series getExistingSeries(String idString) {
+    public static Series getExistingSeries(String idString) {
         return KNOWN_SERIES.get(idString);
     }
 
@@ -91,25 +91,20 @@ public class Series extends Show {
             throw new IllegalArgumentException("Series ID num must be positive");
         }
         String idString = String.valueOf(id);
-        Series mapped;
-        synchronized (KNOWN_SERIES) {
-            mapped = KNOWN_SERIES.get(idString);
-        }
-        if (mapped != null) {
-            if (name.equals(mapped.name)) {
+        Series existing = KNOWN_SERIES.get(idString);
+        if (existing != null) {
+            if (name.equals(existing.name)) {
                 logger.warning("already created series " + name);
-            } else {
-                logger.warning("ID for " + name + " clashes with existing Series " + id + ": "
-                               + mapped);
-                throw new IllegalArgumentException("Series ID num must be unique");
+                return existing;
             }
+            logger.warning("ID for " + name + " clashes with existing Series "
+                           + id + ": " + existing);
+            throw new IllegalArgumentException("Series ID num must be unique");
         }
 
-        mapped = new Series(id, name);
-        synchronized (KNOWN_SERIES) {
-            KNOWN_SERIES.put(idString, mapped);
-        }
-        return mapped;
+        Series created = new Series(id, name);
+        Series race = KNOWN_SERIES.putIfAbsent(idString, created);
+        return (race != null) ? race : created;
     }
 
     /**

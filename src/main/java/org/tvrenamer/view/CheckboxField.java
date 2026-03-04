@@ -34,6 +34,11 @@ public class CheckboxField extends Field {
         item.setChecked(isChecked);
     }
 
+    /**
+     * Returns a sort value for the checkbox state.  Checked items sort before
+     * unchecked ("0" &lt; "1") so that selected files appear at the top when
+     * sorting ascending by the checkbox column.
+     */
     @Override
     public String getItemTextValue(final TableItem item) {
         return (item.getChecked()) ? "0" : "1";

@@ -44,7 +44,7 @@ public class Show extends ShowOption {
     private final String dirName;
 
     final Map<String, Episode> episodes;
-    private final Map<Integer, Season> seasons;
+    private volatile Map<Integer, Season> seasons;
     final Queue<ShowListingsListener> registrations;
 
     private boolean preferDvd = true;
@@ -142,7 +142,9 @@ public class Show extends ShowOption {
      *           whether seasonNum and episodeNum refer to the DVD ordering or
      *           the over-the-air ordering
      */
-    private void addEpisodeToSeason(Episode episode, boolean useDvd) {
+    private void addEpisodeToSeason(
+        Map<Integer, Season> seasonMap, Episode episode, boolean useDvd
+    ) {
         EpisodePlacement placement = episode.getEpisodePlacement(useDvd);
         if (placement == null) {
             // Note, in this case, the Episode will continue to exist in the list of
@@ -151,13 +153,9 @@ public class Show extends ShowOption {
                         + " lacks placement information for "
                         + (useDvd ? "DVD ordering" : "air ordering"));
         } else {
-            // Check to see if there's already an existing episode.  Only applies if we
-            // have a valid placement.
-            Season season = seasons.get(placement.season());
-            if (season == null) {
-                season = new Season(this, placement.season());
-                seasons.put(placement.season(), season);
-            }
+            Season season = seasonMap.computeIfAbsent(
+                placement.season(), num -> new Season(this, num)
+            );
             season.addEpisode(episode, useDvd);
         }
     }
@@ -177,15 +175,16 @@ public class Show extends ShowOption {
      * twice: first in the preferred ordering, and then in the alternate ordering.
      */
     public synchronized void indexEpisodesBySeason() {
-        seasons.clear();
+        Map<Integer, Season> newSeasons = new ConcurrentHashMap<>();
         for (Episode episode : episodes.values()) {
             if (episode == null) {
                 logger.severe("internal error creating episodes for " + name);
                 continue;
             }
-            addEpisodeToSeason(episode, preferDvd);
-            addEpisodeToSeason(episode, !preferDvd);
+            addEpisodeToSeason(newSeasons, episode, preferDvd);
+            addEpisodeToSeason(newSeasons, episode, !preferDvd);
         }
+        seasons = newSeasons;
     }
 
     /**
@@ -336,7 +335,7 @@ public class Show extends ShowOption {
      * @return true if this show has no episodes, false if it has any
      */
     public boolean noEpisodes() {
-        return (episodes.size() == 0);
+        return episodes.isEmpty();
     }
 
     @Override

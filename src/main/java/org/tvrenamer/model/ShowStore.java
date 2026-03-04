@@ -123,7 +123,7 @@ public class ShowStore {
     );
 
     private static final ExecutorService threadPool =
-        Executors.newCachedThreadPool();
+        Executors.newFixedThreadPool(4);
 
     private static final UserPreferences prefs = UserPreferences.getInstance();
 

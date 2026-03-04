@@ -310,6 +310,7 @@ public final class UIStarter {
             ThemeManager.applyNativeTheme(resolved);
 
             themePalette = ThemeManager.createPalette(display);
+            ItemState.registerDisposal(display);
 
             logger.fine("Display created successfully: " + display);
         } catch (Throwable t) {

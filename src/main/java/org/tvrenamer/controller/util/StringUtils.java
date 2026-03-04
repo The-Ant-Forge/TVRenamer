@@ -3,39 +3,49 @@ package org.tvrenamer.controller.util;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class StringUtils {
 
-    private static final Locale THIS_LOCALE = Locale.getDefault();
+    private static final Locale THIS_LOCALE = Locale.ROOT;
 
-    public static final Map<Character, String> SANITISE =
-        Collections.unmodifiableMap(
-            new HashMap<Character, String>() {
-                // provide a replacement for anything that's not valid in Windows
-                // this list is: \ / : * ? " < > |
-                // see http://msdn.microsoft.com/en-us/library/aa365247%28VS.85%29.aspx for more information
-                {
-                    put('\\', "-"); // replace backslash with hyphen
-                    put('/', "-"); // replace forward slash with hyphen
-                    put(':', "-"); // replace colon with a hyphen
-                    put('|', "-"); // replace vertical bar with hyphen
-                    put('*', "-"); // replace asterisk with hyphen; for example,
-                    // the episode "C**tgate" of Veep should become "C--tgate", not "Ctgate"
-                    put('?', ""); // remove question marks
-                    put('<', ""); // remove less-than symbols
-                    put('>', ""); // remove greater-than symbols
-                    put('"', "'"); // replace double quote with apostrophe
-                    put('`', "'"); // replace backquote with apostrophe
-                }
-            }
-        );
+    // Replacements for characters not valid in Windows filenames.
+    // See https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+    public static final Map<Character, String> SANITISE = Map.ofEntries(
+        Map.entry('\\', "-"),
+        Map.entry('/', "-"),
+        Map.entry(':', "-"),
+        Map.entry('|', "-"),
+        Map.entry('*', "-"),
+        Map.entry('?', ""),
+        Map.entry('<', ""),
+        Map.entry('>', ""),
+        Map.entry('"', "'"),
+        Map.entry('`', "'")
+    );
     public static final Set<Character> ILLEGAL_CHARACTERS = SANITISE.keySet();
+
+    // Pre-compiled patterns for replacePunctuation() — avoids recompilation per call
+    private static final Pattern PAT_APOSTROPHE = Pattern.compile("'");
+    private static final Pattern PAT_HYPHEN_LOWER_SPLIT =
+        Pattern.compile("(\\p{Lower})-(\\p{Lower})");
+    private static final Pattern PAT_CAMEL_CAPS =
+        Pattern.compile("(\\p{Lower})([\\p{Upper}\\p{Digit}])");
+    private static final Pattern PAT_DIGIT_UPPER =
+        Pattern.compile("(\\p{Digit})([\\p{Upper}])");
+    private static final Pattern PAT_ACRONYM =
+        Pattern.compile("(?<=(^|[. ])[\\S&&\\D])[.](?=[\\S&&\\D]([.]|$))");
+    private static final Pattern PAT_PUNCTUATION =
+        Pattern.compile("[-._!?$\\[:,;\\\\#%=@`\"\\]}{~><^/+|*]");
+    private static final Pattern PAT_MULTI_SPACE = Pattern.compile(" [ ]+");
+
+    // Pre-compiled patterns for makeDotTitle()
+    private static final Pattern PAT_WORD_SPACE = Pattern.compile("\\b\\s+\\b");
+    private static final Pattern PAT_WHITESPACE = Pattern.compile("\\s");
 
     private static final ThreadLocal<DecimalFormat> DIGITS =
         ThreadLocal.withInitial(() -> new DecimalFormat("##0"));
@@ -66,22 +76,6 @@ public class StringUtils {
             return "";
         }
         return orig.toLowerCase(THIS_LOCALE);
-    }
-
-    /**
-     * Creates an ASCII String from a byte array, without throwing an exception.<p>
-     *
-     * If an exception is thrown by the String constructor, catches it and simply
-     * returns the empty string.
-     *
-     * @param buffer
-     *    a byte array, where the bytes are to be interpreted as ASCII character codes
-     * @return
-     *    a String made from the character codes in the buffer, or the empty String
-     *    if there was a problem (such as, not all the bytes are ASCII codes)
-     */
-    public static String makeString(byte[] buffer) {
-        return new String(buffer, StandardCharsets.US_ASCII);
     }
 
     /**
@@ -123,7 +117,9 @@ public class StringUtils {
      *   inserting dots in cases where there previously was only whitespace
      */
     public static String makeDotTitle(final String titleString) {
-        return titleString.replaceAll("\\b\\s+\\b", ".").replaceAll("\\s", "");
+        return PAT_WHITESPACE.matcher(
+            PAT_WORD_SPACE.matcher(titleString).replaceAll(".")
+        ).replaceAll("");
     }
 
     /**
@@ -357,29 +353,26 @@ public class StringUtils {
         // in show titles: "Bob's Burgers", "The Real O'Neals", "What's Happening", "Don't Trust..."
         // For these, replacing the apostrophe with a space confuses the database; it's much better
         // to simply remove the apostrophe.
-        rval = rval.replaceAll("'", "");
+        rval = PAT_APOSTROPHE.matcher(rval).replaceAll("");
 
         // A hyphen in the middle of a word also should not be broken up into two words.
         // But there's an exception; see doc of isLowerCaseWithHyphens.
         boolean allLower = isLowerCaseWithHyphens(s);
         if (allLower) {
-            rval = rval.replaceAll("(\\p{Lower})-(\\p{Lower})", "$1 $2");
+            rval = PAT_HYPHEN_LOWER_SPLIT.matcher(rval).replaceAll("$1 $2");
         } else {
-            rval = rval.replaceAll("(\\p{Lower})-(\\p{Lower})", "$1$2");
+            rval = PAT_HYPHEN_LOWER_SPLIT.matcher(rval).replaceAll("$1$2");
         }
 
         // transform "CamelCaps" => "Camel Caps"
-        rval = rval.replaceAll("(\\p{Lower})([\\p{Upper}\\p{Digit}])", "$1 $2");
+        rval = PAT_CAMEL_CAPS.matcher(rval).replaceAll("$1 $2");
 
         // example: "30Rock" => "30 Rock"
-        rval = rval.replaceAll("(\\p{Digit})([\\p{Upper}])", "$1 $2");
+        rval = PAT_DIGIT_UPPER.matcher(rval).replaceAll("$1 $2");
 
         // borrowed from http://stackoverflow.com/a/17099039
         // condenses acronyms (".S.H.I.E.L.D." -> " SHIELD")
-        rval = rval.replaceAll(
-            "(?<=(^|[. ])[\\S&&\\D])[.](?=[\\S&&\\D]([.]|$))",
-            ""
-        );
+        rval = PAT_ACRONYM.matcher(rval).replaceAll("");
 
         // Replaces most remaining punctuation with spaces
 
@@ -389,38 +382,14 @@ public class StringUtils {
         // rest are very unlikely to appear, and probably don't need to be handled at
         // all.  But this is basically the longstanding behavior, so let's just leave
         // it like this unless and until we have a specific reason to change.
-        rval = rval.replaceAll("[-._!?$\\[:,;\\\\#%=@`\"\\]}{~><^/+|*]", " ");
+        rval = PAT_PUNCTUATION.matcher(rval).replaceAll(" ");
 
         // Note, punctuation NOT modified, just left in place: parentheses, ampersand
 
         // get rid of superfluous whitespace
-        rval = rval.replaceAll(" [ ]+", " ").trim();
+        rval = PAT_MULTI_SPACE.matcher(rval).replaceAll(" ").trim();
 
         return rval;
-    }
-
-    /**
-     * Decode a URL-encoded query parameter value.
-     *
-     * This is the preferred API for new code. It handles percent-escapes and '+' (space)
-     * correctly for application/x-www-form-urlencoded.
-     *
-     * @param input string to decode
-     * @return decoded string (or empty string if input is null/empty)
-     */
-    public static String decodeUrlQueryParam(final String input) {
-        if (input == null || input.length() == 0) {
-            return "";
-        }
-
-        try {
-            return java.net.URLDecoder.decode(input, StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
-            // Best-effort fallback to legacy behavior.
-            String rval = input.replaceAll("%20", " ");
-            rval = rval.replaceAll("%25", "&");
-            return rval;
-        }
     }
 
     /**

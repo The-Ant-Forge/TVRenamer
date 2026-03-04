@@ -2,6 +2,7 @@
 # Tooling / plugins
 shadow = "9.3.2"
 launch4j = "4.0.0"
+spotbugs = "6.4.8"
 
 # Runtime dependencies
 swt = "3.132.0"
@@ -20,3 +21,4 @@ junit5Jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "jun
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 launch4j = { id = "edu.sc.seis.launch4j", version.ref = "launch4j" }
+spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugs" }

@@ -784,9 +784,12 @@ public final class ResultsTable
             );
         }
 
-        // Show summary dialog if there were parse failures
+        // Parse failures are shown in-table (unchecked, with reason in status column)
+        // rather than as a modal popup, so non-media files like subtitles or docs
+        // don't trigger disruptive error dialogs.
         if (parseFailures > 0) {
-            showParseSummary(totalAdded, parseFailures, failureBreakdown);
+            logger.info("Added " + totalAdded + " file(s); "
+                        + parseFailures + " could not be parsed");
         }
 
         // Refresh any existing "Select Show..." rows in case adding files (or other table refresh
@@ -1438,7 +1441,7 @@ public final class ResultsTable
                 // Not expected, but could happen, primarily if some other,
                 // unrelated program moves the file out from under us.
                 deleteTableItem(item);
-                return;
+                continue;
             }
             FileEpisode episode = episodeMap.get(newFileName);
             episode.refreshReplacement();

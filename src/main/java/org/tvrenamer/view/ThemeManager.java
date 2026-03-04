@@ -17,6 +17,7 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Listener;
+import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.TabFolder;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableItem;
@@ -175,7 +176,7 @@ public final class ThemeManager {
      * On other platforms or older SWT versions, menus remain OS-native and typically
      * ignore programmatic colour changes, so this remains a no-op.
      */
-    public static void applyPalette(Object unusedMenu, ThemePalette palette) {
+    public static void applyPalette(Menu unusedMenu, ThemePalette palette) {
         // Intentionally empty — menu theming is handled by applyNativeTheme() on Windows,
         // and is not controllable on other platforms.
     }

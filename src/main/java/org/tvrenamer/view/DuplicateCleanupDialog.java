@@ -118,6 +118,7 @@ public final class DuplicateCleanupDialog extends Dialog {
         // Apply theme palette for dark mode support.
         ThemePalette themePalette = ThemeManager.createPalette(dialogShell.getDisplay());
         ThemeManager.applyPalette(dialogShell, themePalette);
+        dialogShell.addListener(SWT.Dispose, e -> themePalette.dispose());
 
         createContents(themePalette);
 

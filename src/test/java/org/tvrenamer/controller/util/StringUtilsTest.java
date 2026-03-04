@@ -9,17 +9,6 @@ import org.junit.jupiter.api.Test;
 public class StringUtilsTest {
 
     @Test
-    public void testEncodeUrlQueryParamRoundTrip() {
-        // Includes: spaces, ampersand, question mark, equals, slash, plus, and non-ASCII characters.
-        // We want robust URL encoding/decoding round-tripping for query parameters.
-        final String original = "Doctor Who (2023) & S01E01?x=1+2/3 — café";
-        final String encoded = encodeUrlQueryParam(original);
-        final String decoded = decodeUrlQueryParam(encoded);
-
-        assertEquals(original, decoded);
-    }
-
-    @Test
     public void testSanitiseTitleBackslash() {
         assertEquals("Test-", sanitiseTitle("Test\\"));
         assertEquals("Test-", replaceIllegalCharacters("Test\\"));

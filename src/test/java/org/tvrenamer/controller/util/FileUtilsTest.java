@@ -16,6 +16,8 @@ import java.util.Set;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import org.tvrenamer.model.util.Environment;
 
@@ -292,6 +294,7 @@ public class FileUtilsTest {
     }
 
     @Test
+    @DisabledOnOs(OS.WINDOWS)
     public void testEnsureWritableDirectoryCantWrite() {
         final String dirname = "folder";
         Path dirpath;
@@ -314,12 +317,8 @@ public class FileUtilsTest {
             perms.add(PosixFilePermission.OWNER_READ);
             perms.add(PosixFilePermission.OWNER_EXECUTE);
             Files.setPosixFilePermissions(dirpath, perms);
-        } catch (UnsupportedOperationException ue) {
-            // If this file system can't support POSIX file permissions, then we just
-            // punt.  We can't properly test it, so there is no failure.
-            return;
         } catch (IOException ioe) {
-            fail("cannot test ensureWritableDirectory because newFile failed");
+            fail("cannot test ensureWritableDirectory because setPosixFilePermissions failed");
             return;
         }
 

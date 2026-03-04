@@ -800,17 +800,19 @@ public class FileEpisode {
      */
     public synchronized void listingsFailed(Exception err) {
         seriesStatus = SeriesStatus.NO_LISTINGS;
-        replacementText = getNoListingsPlaceholder();
+        if (actualShow == null) {
+            logger.warning(
+                "error: should not have tried to get listings, do not have show!"
+            );
+            replacementText = DOWNLOADING_FAILED;
+        } else {
+            replacementText = getNoListingsPlaceholder();
+        }
         if (err != null) {
             logger.log(
                 Level.WARNING,
                 "failed to get listings for " + this,
                 err
-            );
-        }
-        if (actualShow == null) {
-            logger.warning(
-                "error: should not have tried to get listings, do not have show!"
             );
         }
     }
@@ -951,7 +953,7 @@ public class FileEpisode {
      *          the option chosen
      */
     public synchronized void setChosenEpisode(final int n) {
-        if (n >= actualEpisodes.size()) {
+        if (actualEpisodes == null || n >= actualEpisodes.size()) {
             logger.warning("no option " + n + " for " + this);
         } else {
             int previous = chosenEpisode;

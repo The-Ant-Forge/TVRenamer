@@ -1,5 +1,7 @@
 package org.tvrenamer.model;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -483,7 +485,7 @@ public final class ShowSelectionEvaluator {
             ? extracted
             : extractedNormalized;
 
-        List<ScoredOption> scored = new java.util.ArrayList<>();
+        List<ScoredOption> scored = new ArrayList<>();
         for (ShowOption opt : options) {
             if (opt == null) {
                 continue;
@@ -491,7 +493,7 @@ public final class ShowSelectionEvaluator {
             double score = bestScore(opt, compareText);
             scored.add(new ScoredOption(opt, score));
         }
-        java.util.Collections.sort(scored);
+        Collections.sort(scored);
 
         if (!scored.isEmpty()) {
             double bestScore = scored.get(0).score();

@@ -32,6 +32,7 @@ final class AboutDialog extends Dialog {
     private Shell aboutShell;
     private Font titleFont;
     private Font versionFont;
+    private org.eclipse.swt.graphics.Image aboutIcon;
 
     /**
      * Static inner class to check if there's an update available
@@ -80,7 +81,8 @@ final class AboutDialog extends Dialog {
         // Create the dialog window
         aboutShell = new Shell(getParent(), getStyle());
         aboutShell.setText(ABOUT_LABEL);
-        aboutShell.setImage(UIStarter.readImageFromPath(APPLICATION_ICON_PATH));
+        aboutIcon = UIStarter.readImageFromPath(APPLICATION_ICON_PATH);
+        aboutShell.setImage(aboutIcon);
 
         // Add the contents of the dialog window
         createContents();
@@ -91,6 +93,9 @@ final class AboutDialog extends Dialog {
             }
             if (versionFont != null && !versionFont.isDisposed()) {
                 versionFont.dispose();
+            }
+            if (aboutIcon != null && !aboutIcon.isDisposed()) {
+                aboutIcon.dispose();
             }
         });
 
@@ -129,7 +134,7 @@ final class AboutDialog extends Dialog {
         iconGridData.grabExcessVerticalSpace = false;
         iconGridData.grabExcessHorizontalSpace = false;
         iconLabel.setLayoutData(iconGridData);
-        iconLabel.setImage(UIStarter.readImageFromPath(APPLICATION_ICON_PATH));
+        iconLabel.setImage(aboutIcon);
 
         Label applicationLabel = new Label(aboutShell, SWT.NONE);
         FontData defaultFont = ui.getDefaultSystemFont();

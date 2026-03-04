@@ -2,9 +2,9 @@ package org.tvrenamer.model.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.tvrenamer.controller.util.StringUtils;
 
 public class Environment {
 
@@ -38,9 +38,6 @@ public class Environment {
     public static final boolean IS_MAC_OSX = (JVM_OS_TYPE == OSType.MAC);
     public static final boolean IS_WINDOWS = (JVM_OS_TYPE == OSType.WINDOWS);
 
-    @SuppressWarnings("unused")
-    public static final boolean IS_UN_X = (JVM_OS_TYPE == OSType.LINUX);
-
     // If InputStream.read() fails, it returns -1.  So, anything less than zero is
     // clearly a failure.  But we assume a version must at least be "x.y", so let's
     // call anything less than three bytes a fail.
@@ -48,13 +45,10 @@ public class Environment {
 
     private static String readResourceTrimmed(
         final String resourcePath,
-        final int maxBytes,
         final int minBytes,
         final String notFoundMessage,
         final String tooShortMessage
     ) {
-        byte[] buffer = new byte[maxBytes];
-
         try (
             InputStream stream = Environment.class.getResourceAsStream(
                 resourcePath
@@ -64,12 +58,12 @@ public class Environment {
                 throw new RuntimeException(notFoundMessage);
             }
 
-            int bytesRead = stream.read(buffer);
-            if (bytesRead < minBytes) {
+            byte[] bytes = stream.readAllBytes();
+            if (bytes.length < minBytes) {
                 throw new RuntimeException(tooShortMessage);
             }
 
-            return StringUtils.makeString(buffer).trim();
+            return new String(bytes, StandardCharsets.US_ASCII).trim();
         } catch (IOException ioe) {
             logger.log(
                 Level.WARNING,
@@ -99,7 +93,6 @@ public class Environment {
     static String readVersionNumber() {
         return readResourceTrimmed(
             "/tvrenamer.version",
-            32,
             MIN_BYTES_FOR_VERSION,
             "Version file '/tvrenamer.version' not found on classpath",
             "Unable to extract version from version file"
@@ -115,30 +108,9 @@ public class Environment {
         try {
             return readResourceTrimmed(
                 "/tvrenamer.builddate",
-                32,
                 1,
                 "Build date file '/tvrenamer.builddate' not found on classpath",
                 "Unable to extract build date from build date file"
-            );
-        } catch (RuntimeException ignored) {
-            // Best-effort: show nothing rather than crashing the UI.
-            return "";
-        }
-    }
-
-    /**
-     * Read the git commit SHA from the generated build metadata resource.
-     *
-     * @return full commit SHA, or empty string if unavailable
-     */
-    public static String readCommitSha() {
-        try {
-            return readResourceTrimmed(
-                "/tvrenamer.commit",
-                128,
-                1,
-                "Commit file '/tvrenamer.commit' not found on classpath",
-                "Unable to extract commit from commit file"
             );
         } catch (RuntimeException ignored) {
             // Best-effort: show nothing rather than crashing the UI.

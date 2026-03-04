@@ -118,6 +118,7 @@ public final class BatchShowDisambiguationDialog extends Dialog {
         // Apply theme palette so controls/tables inherit dark mode styling.
         themePalette = ThemeManager.createPalette(dialogShell.getDisplay());
         ThemeManager.applyPalette(dialogShell, themePalette);
+        dialogShell.addListener(SWT.Dispose, e -> themePalette.dispose());
 
         // Treat closing the window via the title-bar X as "OK" if at least one selection exists.
         // Otherwise treat it as Cancel to avoid returning an empty selection map.

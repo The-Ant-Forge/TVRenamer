@@ -63,7 +63,7 @@ public class Constants {
     public static final String TVRENAMER_REPOSITORY_URL =
         "https://github.com/The-Ant-Forge/TVRenamer";
     public static final String TVRENAMER_LICENSE_URL =
-        "http://www.gnu.org/licenses/gpl-2.0.html";
+        "https://www.gnu.org/licenses/gpl-2.0.html";
 
     // Original project links (attribution)
     public static final String ORIGINAL_PROJECT_REPOSITORY_URL =
@@ -71,20 +71,16 @@ public class Constants {
     public static final String ORIGINAL_PROJECT_WEBSITE_URL =
         "https://www.tvrenamer.org/";
 
-    // Fork: no support email link (project uses GitHub Issues).
-    // Keep EMAIL_LINK defined for now to avoid widespread churn; AboutDialog no longer uses it.
-    public static final String EMAIL_LINK = "";
-
     public static final String LICENSE_TEXT_1 = "Licensed under the ";
     public static final String LICENSE_TEXT_2 = "GNU General Public License v2";
     public static final String PROJECT_PAGE = "Project Page";
     public static final String ISSUE_TRACKER = "Issue Tracker";
-    public static final String SEND_SUPPORT_EMAIL = "Send support email";
     public static final String SOURCE_CODE_LINK = "Source Code";
 
     // ---- Resource paths ----
 
     public static final String XML_SUFFIX = ".xml";
+    // Filesystem fallback path for icons (works in dev; not from fat JAR)
     public static final String ICON_PARENT_DIRECTORY = "src/main/resources";
     public static final String APPLICATION_ICON_PATH = "/icons/tvrenamer.png";
     public static final String SUBLINK_PATH = "/icons/SweetieLegacy/";
@@ -312,8 +308,6 @@ public class Constants {
     public static final String ADDED_PLACEHOLDER_FILENAME = "Downloading ...";
     public static final String EPISODE_NOT_FOUND =
         "Could not get episode for show";
-    public static final String BROKEN_PLACEHOLDER_FILENAME =
-        "Unable to find show information";
     public static final String DOWNLOADING_FAILED =
         "Downloading show listings failed";
     public static final String TIMEOUT_DOWNLOADING =
@@ -357,10 +351,6 @@ public class Constants {
     public static final Path PREFERENCES_FILE_LEGACY = USER_HOME_DIR.resolve(
         "tvrenamer.preferences"
     );
-    public static final Path OVERRIDES_FILE_LEGACY = USER_HOME_DIR.resolve(
-        ".tvrenameroverrides"
-    );
-
     public static final String EMPTY_STRING = "";
 
     // ---- FileEpisode constants ----

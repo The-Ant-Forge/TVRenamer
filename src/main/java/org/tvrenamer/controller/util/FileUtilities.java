@@ -697,8 +697,9 @@ public class FileUtilities {
         if (filename == null) {
             return false;
         }
-        String lower = filename.toLowerCase(java.util.Locale.ROOT);
-        return VIDEO_EXTENSIONS.stream().anyMatch(lower::endsWith);
+        String ext = StringUtils.getExtension(filename)
+            .toLowerCase(java.util.Locale.ROOT);
+        return VIDEO_EXTENSIONS.contains(ext);
     }
 
     /**

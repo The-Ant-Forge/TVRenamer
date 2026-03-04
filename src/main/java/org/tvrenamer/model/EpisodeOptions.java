@@ -79,7 +79,7 @@ class EpisodeOptions {
      * @return the Episode that best matches the request criteria, or null if none does
      */
     public Episode get(boolean preferDvd) {
-        if (episodeList.size() == 0) {
+        if (episodeList.isEmpty()) {
             return null;
         }
 

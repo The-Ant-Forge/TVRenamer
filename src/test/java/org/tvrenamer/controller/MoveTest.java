@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -42,6 +43,8 @@ import org.tvrenamer.model.MoveObserver;
  */
 public class MoveTest {
 
+    private static Level savedLogLevel;
+
     /**
      * The specifics of how we rename and move files is very dependent on the
      * user preferences.  Set the values we expect here, before we run any
@@ -50,6 +53,8 @@ public class MoveTest {
      */
     @BeforeAll
     public static void initializePrefs() {
+        savedLogLevel = FileMover.logger.getLevel();
+
         FileMover.userPrefs.setCheckForUpdates(false);
 
         FileMover.userPrefs.setSeasonPrefix("Season ");
@@ -62,6 +67,11 @@ public class MoveTest {
         // as we run tests.  Setting the level to "SEVERE" means nothing
         // below that level will be printed.
         FileMover.logger.setLevel(Level.SEVERE);
+    }
+
+    @AfterAll
+    public static void restorePrefs() {
+        FileMover.logger.setLevel(savedLogLevel);
     }
 
     private static final EpisodeTestData robotChicken0704 =

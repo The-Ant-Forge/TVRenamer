@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.shadow)
 
     // Static analysis
-    id 'com.github.spotbugs' version '6.4.8'
+    alias(libs.plugins.spotbugs)
 }
 
 dependencyLocking {
@@ -131,7 +131,7 @@ launch4j {
     icon = "${projectDir}/src/main/resources/icons/oldschool-tv-icon.ico"
     jarTask = tasks.shadowJar
     outfile = "TVRenamer.exe"
-    downloadUrl = "http://java.com/download"
+    downloadUrl = "https://adoptium.net"
     headerType = "gui"
     requires64Bit = true
     jreMinVersion = "17"
@@ -172,7 +172,7 @@ tasks.register('generateBuildMetadataFiles') {
     outputs.file(layout.buildDirectory.file("generated/version/tvrenamer.builddate"))
     outputs.file(layout.buildDirectory.file("generated/version/tvrenamer.commit"))
     doLast {
-        def buildNumber = computeBuildNumber()
+        def buildNumber = computedBuildNumber
         def sha = computeCommitSha()
         def builtOn = computeBuildDateYYMMDDUtc()
 
@@ -245,14 +245,11 @@ tasks.register('shadowJarVersioned', com.github.jengelman.gradle.plugins.shadow.
     manifest { attributes(swtManifestAttributes) }
     addBuildMetadata(it)
 
-    archiveFileName.set("tvrenamer-${computeBuildNumber()}.jar")
+    archiveFileName.set("tvrenamer-${computedBuildNumber}.jar")
     destinationDirectory.set(layout.buildDirectory.dir("libs"))
 }
 
-// Ensure `build` produces both jars.
-tasks.named('build') {
-    dependsOn(tasks.named('shadowJarVersioned'))
-}
+// shadowJarVersioned is opt-in; run explicitly or via createExe when packaging.
 
 sourceSets {
     main {

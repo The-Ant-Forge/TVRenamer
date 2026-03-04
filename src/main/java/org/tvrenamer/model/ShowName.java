@@ -1,9 +1,9 @@
 package org.tvrenamer.model;
 
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 import org.tvrenamer.controller.ShowInformationListener;
 import org.tvrenamer.controller.util.StringUtils;
@@ -58,7 +58,7 @@ public class ShowName {
         final String queryString;
         private ShowOption matchedShow = null;
         private final List<ShowInformationListener> listeners =
-            new LinkedList<>();
+            new java.util.LinkedList<>();
 
         private static final Map<String, QueryString> QUERY_STRINGS =
             new ConcurrentHashMap<>();
@@ -98,7 +98,7 @@ public class ShowName {
         // see ShowName.hasListeners for documentation
         private boolean hasListeners() {
             synchronized (listeners) {
-                return (listeners.size() > 0);
+                return !listeners.isEmpty();
             }
         }
 
@@ -155,12 +155,9 @@ public class ShowName {
          */
         static QueryString lookupQueryString(String foundName) {
             String queryString = StringUtils.makeQueryString(foundName);
-            QueryString queryObj = QUERY_STRINGS.get(queryString);
-            if (queryObj == null) {
-                queryObj = new QueryString(queryString);
-                QUERY_STRINGS.put(queryString, queryObj);
-            }
-            return queryObj;
+            return QUERY_STRINGS.computeIfAbsent(
+                queryString, QueryString::new
+            );
         }
     }
 
@@ -184,12 +181,7 @@ public class ShowName {
      * @return the ShowName object for that filenameShow
      */
     public static ShowName mapShowName(String filenameShow) {
-        ShowName showName = SHOW_NAMES.get(filenameShow);
-        if (showName == null) {
-            showName = new ShowName(filenameShow);
-            SHOW_NAMES.put(filenameShow, showName);
-        }
-        return showName;
+        return SHOW_NAMES.computeIfAbsent(filenameShow, ShowName::new);
     }
 
     /**
@@ -206,17 +198,16 @@ public class ShowName {
      * @return the ShowName object for that filenameShow
      */
     public static ShowName lookupShowName(String filenameShow) {
-        ShowName showName = SHOW_NAMES.get(filenameShow);
-        if (showName == null) {
-            showName = new ShowName(filenameShow);
-            SHOW_NAMES.put(filenameShow, showName);
-            logger.severe(
-                "could not get show name for " +
-                    filenameShow +
-                    ", so created one instead"
-            );
+        ShowName existing = SHOW_NAMES.get(filenameShow);
+        if (existing != null) {
+            return existing;
         }
-        return showName;
+        logger.severe(
+            "could not get show name for " +
+                filenameShow +
+                ", so created one instead"
+        );
+        return SHOW_NAMES.computeIfAbsent(filenameShow, ShowName::new);
     }
 
     /*
@@ -311,7 +302,7 @@ public class ShowName {
         this.foundName = foundName;
         queryString = QueryString.lookupQueryString(foundName);
 
-        showOptions = new LinkedList<>();
+        showOptions = new CopyOnWriteArrayList<>();
     }
 
     /**
@@ -322,7 +313,7 @@ public class ShowName {
      * @return a copy of the current show options list (may be empty)
      */
     public List<ShowOption> getShowOptions() {
-        return new LinkedList<>(showOptions);
+        return List.copyOf(showOptions);
     }
 
     /**
@@ -343,7 +334,7 @@ public class ShowName {
      * @return true if this ShowName has show options; false otherwise
      */
     public boolean hasShowOptions() {
-        return (showOptions.size() > 0);
+        return !showOptions.isEmpty();
     }
 
     /**

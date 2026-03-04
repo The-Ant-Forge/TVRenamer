@@ -3,7 +3,7 @@ package org.tvrenamer.controller.util;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.Locale;
+import org.tvrenamer.model.util.Environment;
 
 /**
  * Shared utility for detecting external tool installations.
@@ -12,11 +12,6 @@ import java.util.Locale;
  * well-known locations (Windows Program Files, macOS Homebrew).
  */
 public final class ExternalToolDetector {
-
-    private static final String OS_NAME =
-        System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-    private static final boolean IS_WINDOWS = OS_NAME.contains("win");
-    private static final boolean IS_MAC = OS_NAME.contains("mac");
 
     private ExternalToolDetector() {
         // utility class
@@ -49,7 +44,7 @@ public final class ExternalToolDetector {
         }
 
         // Windows well-known locations
-        if (IS_WINDOWS) {
+        if (Environment.IS_WINDOWS) {
             for (String path : windowsPaths) {
                 if (Files.isExecutable(Paths.get(path))) {
                     return path;
@@ -58,7 +53,7 @@ public final class ExternalToolDetector {
         }
 
         // macOS Homebrew / well-known locations
-        if (IS_MAC) {
+        if (Environment.IS_MAC_OSX) {
             for (String path : macPaths) {
                 if (Files.isExecutable(Paths.get(path))) {
                     return path;
