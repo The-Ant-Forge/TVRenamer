@@ -10,7 +10,7 @@ xstream = "1.4.21"
 okhttp = "5.3.2"
 
 # Test dependencies
-junit5 = "5.14.2"
+junit5 = "5.14.3"
 
 [libraries]
 swtWin64 = { module = "org.eclipse.platform:org.eclipse.swt.win32.win32.x86_64", version.ref = "swt" }
