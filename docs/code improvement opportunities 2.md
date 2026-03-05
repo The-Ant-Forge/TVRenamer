@@ -3,7 +3,7 @@
 Findings from a full codebase review (March 2026). Grouped and prioritised by:
 impact > security > robustness > performance > consolidation > cleanliness.
 
-**Status:** 38 of 40 items completed (34 in v1.0.248, 4 more post-release). Remaining: #35 partial (FilenameParserTest/StringUtilsTest), #39, #40.
+**Status:** 38 of 40 items completed (34 in v1.0.248, 4 more post-release). Remaining deferred: #12, #15, #32. Note: #35 partial — FilenameParserTest and StringUtilsTest still have real show names.
 
 ---
 
@@ -312,13 +312,10 @@ Also extract a shared `createDocumentBuilder()` helper (two identical call sites
 ## Summary
 
 ### Deferred items (better suited for dedicated future work):
-The following were deferred:
 
 #12 — Magic string coupling (typed exception; design change)
 #15 — O(n) table recolour on paint (medium effort, needs careful SWT testing)
 #32 — New tests for findDuplicateVideoFiles (medium effort)
-#34 — FileEpisodeTest @TempDir migration (moderate refactor)
-#35 — Replace real show names in test data (widespread)
 
 ### Task list status
 
