@@ -137,6 +137,156 @@ public class UserPreferences {
     }
 
     /**
+     * Create a UserPreferences instance from parsed XML data.
+     * Fields not present in the map retain their default values.
+     * This is used by UserPreferencesPersistence to construct an instance
+     * without firing PropertyChangeSupport events.
+     *
+     * @param scalars map of field names to string values
+     * @param keywords list of ignore keywords (null = use defaults)
+     * @param nameOverrides show name overrides map (null = empty)
+     * @param disambigOverrides show disambiguation overrides map (null = empty)
+     * @return a populated UserPreferences instance
+     */
+    public static UserPreferences fromParsedXml(
+        Map<String, String> scalars,
+        List<String> keywords,
+        Map<String, String> nameOverrides,
+        Map<String, String> disambigOverrides
+    ) {
+        UserPreferences p = new UserPreferences();
+
+        if (scalars == null) {
+            return p;
+        }
+
+        String val;
+
+        val = scalars.get("destDir");
+        if (val != null) {
+            p.destDir = val;
+            p.destDirPath = Paths.get(val);
+        }
+
+        val = scalars.get("seasonPrefix");
+        if (val != null) {
+            p.seasonPrefix = val;
+        }
+
+        val = scalars.get("seasonPrefixLeadingZero");
+        if (val != null) {
+            p.seasonPrefixLeadingZero = Boolean.parseBoolean(val);
+        }
+
+        // Handle legacy alias: moveEnabled -> moveSelected
+        val = scalars.get("moveSelected");
+        if (val == null) {
+            val = scalars.get("moveEnabled");
+        }
+        if (val != null) {
+            p.moveSelected = Boolean.parseBoolean(val);
+        }
+
+        // Handle legacy alias: renameEnabled -> renameSelected
+        val = scalars.get("renameSelected");
+        if (val == null) {
+            val = scalars.get("renameEnabled");
+        }
+        if (val != null) {
+            p.renameSelected = Boolean.parseBoolean(val);
+        }
+
+        val = scalars.get("removeEmptiedDirectories");
+        if (val != null) {
+            p.removeEmptiedDirectories = Boolean.parseBoolean(val);
+        }
+
+        val = scalars.get("deleteRowAfterMove");
+        if (val != null) {
+            p.deleteRowAfterMove = Boolean.parseBoolean(val);
+        }
+
+        val = scalars.get("renameReplacementMask");
+        if (val != null) {
+            p.renameReplacementMask = val;
+        }
+
+        val = scalars.get("checkForUpdates");
+        if (val != null) {
+            p.checkForUpdates = Boolean.parseBoolean(val);
+        }
+
+        // Handle legacy alias: theme -> themeMode
+        val = scalars.get("themeMode");
+        if (val == null) {
+            val = scalars.get("theme");
+        }
+        if (val != null) {
+            try {
+                p.themeMode = ThemeMode.valueOf(val);
+            } catch (IllegalArgumentException e) {
+                logger.warning("Unknown theme mode: " + val + "; defaulting to LIGHT");
+                p.themeMode = ThemeMode.LIGHT;
+            }
+        }
+
+        val = scalars.get("recursivelyAddFolders");
+        if (val != null) {
+            p.recursivelyAddFolders = Boolean.parseBoolean(val);
+        }
+
+        val = scalars.get("preserveFileModificationTime");
+        if (val != null) {
+            p.preserveFileModificationTime = Boolean.parseBoolean(val);
+        }
+
+        val = scalars.get("preferDvdOrderIfPresent");
+        if (val != null) {
+            p.preferDvdOrderIfPresent = Boolean.parseBoolean(val);
+        }
+
+        val = scalars.get("alwaysOverwriteDestination");
+        if (val != null) {
+            p.alwaysOverwriteDestination = Boolean.parseBoolean(val);
+        }
+
+        val = scalars.get("cleanupDuplicateVideoFiles");
+        if (val != null) {
+            p.cleanupDuplicateVideoFiles = Boolean.parseBoolean(val);
+        }
+
+        val = scalars.get("tagVideoMetadata");
+        if (val != null) {
+            p.tagVideoMetadata = Boolean.parseBoolean(val);
+        }
+
+        val = scalars.get("processedFileCount");
+        if (val != null) {
+            try {
+                p.processedFileCount = Long.parseLong(val);
+            } catch (NumberFormatException ignored) {
+                // keep default
+            }
+        }
+
+        if (keywords != null && !keywords.isEmpty()) {
+            p.ignoreKeywords.clear();
+            p.ignoreKeywords.addAll(keywords);
+        }
+        p.buildIgnoredKeywordsString();
+
+        if (nameOverrides != null) {
+            p.showNameOverrides.putAll(nameOverrides);
+        }
+
+        if (disambigOverrides != null) {
+            p.showDisambiguationOverrides.putAll(disambigOverrides);
+        }
+
+        return p;
+    }
+
+    /**
      * Resolve a show name by applying user-defined overrides.
      * Matching is case-insensitive exact match.
      *
@@ -487,19 +637,6 @@ public class UserPreferences {
         );
 
         if (prefs != null) {
-            prefs.destDirPath = Paths.get(prefs.destDir);
-            prefs.buildIgnoredKeywordsString();
-            if (prefs.themeMode == null) {
-                prefs.themeMode = ThemeMode.LIGHT;
-            }
-
-            // Backward compatibility: older prefs files won't have this field.
-            // Default to preserving timestamps.
-            // (XStream will leave it as the Java default false if absent.)
-            // We only correct it here when it looks like it's missing/uninitialized.
-            if (!prefs.preserveFileModificationTime) {
-                prefs.preserveFileModificationTime = true;
-            }
             logger.finer(
                 "Successfully read preferences from: " +
                     PREFERENCES_FILE.toAbsolutePath()

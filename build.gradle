@@ -74,12 +74,7 @@ dependencies {
         transitive = false
     }
 
-    // Core dependencies - modernized
-    implementation(libs.xstream)
-    // xmlpull is provided transitively via xstream -> mxparser -> xmlpull
-
-    // Networking
-    implementation(libs.okhttp)
+    // XML persistence and HTTP use JDK built-in APIs (javax.xml, java.net.http)
 
     // Testing
     testImplementation(libs.junit5Jupiter)

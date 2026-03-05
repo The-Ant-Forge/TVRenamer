@@ -2,13 +2,13 @@ package org.tvrenamer.controller;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
 import org.tvrenamer.model.TVRenamerIOException;
 
 class HttpConnectionHandler {
@@ -17,12 +17,12 @@ class HttpConnectionHandler {
         HttpConnectionHandler.class.getName()
     );
 
-    private static final int CONNECT_TIMEOUT_MS = 30000;
-    private static final int READ_TIMEOUT_MS = 60000;
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
 
-    private static final OkHttpClient CLIENT = new OkHttpClient.Builder()
-        .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-        .readTimeout(READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+    private static final HttpClient CLIENT = HttpClient.newBuilder()
+        .connectTimeout(CONNECT_TIMEOUT)
+        .followRedirects(HttpClient.Redirect.NORMAL)
         .build();
 
     /**
@@ -31,35 +31,34 @@ class HttpConnectionHandler {
      * that was already known, but it's really not an issue, especially since this only
      * happens in the error case.
      *
-     * @param response
-     *   the Response object that we got back after trying to download the URL
+     * @param statusCode
+     *   the HTTP status code from the response, or -1 if no response was received
      * @param url
      *   the URL we tried to download, as a String
-     * @param ioe
-     *   an I/O exception that may give some indication of what went wrong (and, at least,
-     *   gives us a stack trace...)
+     * @param cause
+     *   an exception that may give some indication of what went wrong
      * @return
      *   does not actually return anything; always throws an exception
      * @throws TVRenamerIOException in all cases; the fact of this method being called
      *   means something went wrong; creates it from the given arguments
      */
     private String downloadUrlFailed(
-        final Response response,
+        final int statusCode,
         final String url,
-        final IOException ioe
+        final Exception cause
     ) throws TVRenamerIOException {
         String msg;
-        if (ioe == null) {
+        if (cause == null) {
             msg =
                 "attempt to download " +
                 url +
                 " failed with response code " +
-                response.code();
+                statusCode;
         } else {
             msg = "exception downloading " + url;
         }
-        logger.log(Level.WARNING, msg, ioe);
-        throw new TVRenamerIOException(msg, ioe);
+        logger.log(Level.WARNING, msg, cause);
+        throw new TVRenamerIOException(msg, cause);
     }
 
     /**
@@ -72,30 +71,40 @@ class HttpConnectionHandler {
     public String downloadUrl(String urlString) throws TVRenamerIOException {
         logger.fine("Downloading URL " + urlString);
 
-        Request request = new Request.Builder().url(urlString).build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(urlString))
+            .timeout(REQUEST_TIMEOUT)
+            .GET()
+            .build();
 
-        try (Response response = CLIENT.newCall(request).execute()) {
-            if (response.isSuccessful()) {
-                ResponseBody body = response.body();
-                if (body != null) {
-                    String downloaded = body.string();
-                    if (logger.isLoggable(Level.FINEST)) {
-                        logger.log(
-                            Level.FINEST,
-                            "Url stream:\n{0}",
-                            downloaded
-                        );
-                    }
-                    return downloaded;
+        try {
+            HttpResponse<String> response = CLIENT.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+            );
+
+            int statusCode = response.statusCode();
+            if (statusCode >= 200 && statusCode < 300) {
+                String downloaded = response.body();
+                if (logger.isLoggable(Level.FINEST)) {
+                    logger.log(
+                        Level.FINEST,
+                        "Url stream:\n{0}",
+                        downloaded
+                    );
                 }
-            } else if (response.code() == 404) {
+                return downloaded;
+            } else if (statusCode == 404) {
                 throw new FileNotFoundException(urlString);
             }
 
             // Preserve response details for diagnostics.
-            return downloadUrlFailed(response, urlString, null);
+            return downloadUrlFailed(statusCode, urlString, null);
         } catch (IOException ioe) {
-            return downloadUrlFailed(null, urlString, ioe);
+            return downloadUrlFailed(-1, urlString, ioe);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            return downloadUrlFailed(-1, urlString, ie);
         }
     }
 }

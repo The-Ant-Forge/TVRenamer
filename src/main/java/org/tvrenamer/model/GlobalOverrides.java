@@ -52,4 +52,25 @@ public class GlobalOverrides {
         String name = showNames.get(showName);
         return (name != null) ? name : showName;
     }
+
+    /**
+     * @return unmodifiable view of the show names map, for persistence
+     */
+    public Map<String, String> getShowNames() {
+        return java.util.Collections.unmodifiableMap(showNames);
+    }
+
+    /**
+     * Create a GlobalOverrides instance from parsed XML data.
+     *
+     * @param showNames map of show name overrides (null = empty)
+     * @return a populated GlobalOverrides instance
+     */
+    public static GlobalOverrides fromParsedXml(Map<String, String> showNames) {
+        GlobalOverrides overrides = new GlobalOverrides();
+        if (showNames != null) {
+            overrides.showNames.putAll(showNames);
+        }
+        return overrides;
+    }
 }
