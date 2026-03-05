@@ -2,21 +2,12 @@ package org.tvrenamer.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.tvrenamer.model.util.Constants.*;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
-import org.tvrenamer.controller.util.FileUtilities;
-
-import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -24,62 +15,13 @@ import java.util.logging.Logger;
 public class FileEpisodeTest {
     private static final Logger logger = Logger.getLogger(FileEpisodeTest.class.getName());
 
-    /**
-     * Just an unordered list of test data.
-     */
     private static final List<EpisodeTestData> values = new ArrayList<>();
 
-    /**
-     * We don't want to write directly into the temp dir.  That could make it a lot
-     * trickier to clean up.  Always create our own subdirectory within the temp
-     * dir, and do all our work in there.  We may create further sub-directories
-     * below this one.
-     */
-    private static final Path OUR_TEMP_DIR = TMP_DIR.resolve(APPLICATION_NAME);
-
-    /**
-     * Static inner class to delete everything, in conjunction with walkFileTree
-     */
-    private static class FileDeleter extends SimpleFileVisitor<Path> {
-        @Override
-        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-            throws IOException
-        {
-            FileUtilities.deleteFile(file);
-            return FileVisitResult.CONTINUE;
-        }
-
-        @Override
-        public FileVisitResult postVisitDirectory(Path dir, IOException exc)
-            throws IOException
-        {
-            FileUtilities.rmdir(dir);
-            return FileVisitResult.CONTINUE;
-        }
-    }
+    @TempDir
+    Path tempDir;
 
     private final UserPreferences prefs = UserPreferences.getInstance();
 
-    // Helper method.  Basically mkdirs, but expects that the directory does
-    // NOT exist, and considers it an error if it does.  Also does one final
-    // check that, after we believe we've created it, the directory actually
-    // does exist.
-    @SuppressWarnings("SameParameterValue")
-    private void createNewDirectory(Path newdir) {
-        if (Files.exists(newdir)) {
-            fail("directory " + newdir + " already exists.  It should not!");
-        }
-        boolean madeDir = FileUtilities.mkdirs(newdir);
-        if (!madeDir) {
-            fail("unable to create directory " + newdir);
-        }
-        if (!Files.exists(newdir)) {
-            fail("directory " + newdir + " still does not exist!");
-        }
-    }
-
-    // Helper method to give information about an exception we catch, and
-    // automatically fail because of it.
     private void verboseFail(String msg, Exception e) {
         String failMsg = msg + ": " + e.getClass().getName() + " ";
         String exceptionMessage = e.getMessage();
@@ -92,1006 +34,819 @@ public class FileEpisodeTest {
         fail(failMsg);
     }
 
-    /**
-     * Just makes sure our temp directory exists.
-     */
-    @BeforeEach
-    public void setUp() {
-        createNewDirectory(OUR_TEMP_DIR);
-    }
-
-    /* This method is intended to delete the temp files and our temp directory,
-     * and to report failure if it is unable to do so.  Along the way, we check
-     * for several extremely-unlikely-to-happen errors, just in case.  But we
-     * don't ever want to interrupt the cleanup to report a failure.  Be sure to
-     * try to delete each file and the directory before aborting due to any
-     * failure.
-     */
-    private void teardown(List<Path> testFiles) {
-        List<Path> outsideFailures = new ArrayList<>();
-        List<Path> deleteFailures = new ArrayList<>();
-        for (Path path : testFiles) {
-            Path parent = path.getParent();
-            if (parent != null) {
-                boolean expected = FileUtilities.isSameFile(OUR_TEMP_DIR, parent);
-                if (!expected) {
-                    outsideFailures.add(path);
-                }
-            }
-            logger.fine("Deleting " + path);
-            boolean deleted = FileUtilities.deleteFile(path);
-            if (!deleted) {
-                deleteFailures.add(path);
-            }
-        }
-        if (FileUtilities.isDirEmpty(OUR_TEMP_DIR)) {
-            boolean removed = FileUtilities.rmdir(OUR_TEMP_DIR);
-            if (!removed) {
-                fail("unable to delete empty temp directory " + OUR_TEMP_DIR);
-            }
-        } else {
-            fail("did not succeed in emptying temp directory " + OUR_TEMP_DIR);
-        }
-        if (!deleteFailures.isEmpty()) {
-            fail("failed to delete " + deleteFailures.size() + " temp file(s)");
-        }
-        if (!outsideFailures.isEmpty()) {
-            fail("created " + outsideFailures.size() + " file(s) in the wrong place");
-        }
-    }
-
-    // We're going to add a bunch of test cases to the list.  The first two have been in this file
-    // for a long time (in a different form), and are testing specific functionality.  The rest
-    // are from FilenameParserTest.  In some cases, there's a strong hint as to what they're
-    // testing, and in others, maybe not so much.  Try to refine these test cases down and expand
-    // them so that specific functionality is being tested.
-    //
-    // The "BeforeClass" annotation means any method so marked will be run before the tests, so
-    // we don't have to stuff it all into one huge method.  We can break it down arbitrarily.
-    // As we change the test data to be more meaningful, we could change the method names as well.
-
     @BeforeAll
     public static void setupValues() {
-        /**
-         * Test case for <a href="https://github.com/tvrenamer/tvrenamer/issues/36">Issue 36</a>
-         * where the title "$pringfield" breaks the regex used for String.replaceAll()
-         */
+        // Test that regex special characters in episode titles are included literally
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("the.simpsons")
-                   .properShowName("The Simpsons")
-                   .showId("71663")
+                   .filenameShow("the.baxters")
+                   .properShowName("The Baxters")
+                   .showId("90001")
                    .seasonNumString("5")
                    .episodeNumString("10")
                    .episodeResolution("720p")
-                   .episodeTitle("$pringfield")
-                   .episodeId("55542")
+                   .episodeTitle("$ecret Fund")
+                   .episodeId("900001")
                    .replacementMask("%S [%sx%e] %t %r")
                    .documentation("makes sure regex characters are included literally in filename")
-                   .expectedReplacement("The Simpsons [5x10] $pringfield 720p")
+                   .expectedReplacement("The Baxters [5x10] $ecret Fund 720p")
                    .build());
-        /**
-         * Ensure that colons (:) don't make it into the renamed filename <br />
-         * Fixes <a href="https://github.com/tvrenamer/tvrenamer/issues/46">Issue 46</a>
-         */
+        // Ensure that colons (:) don't make it into the renamed filename
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("steven.segal.lawman")
-                   .properShowName("Steven Seagal: Lawman")
-                   .showId("126841")
+                   .filenameShow("jake.marshall.lawman")
+                   .properShowName("Jake Marshall: Lawman")
+                   .showId("90002")
                    .seasonNumString("1")
                    .episodeNumString("01")
-                   .episodeTitle("The Way of the Gun")
+                   .episodeTitle("The Way of the Badge")
                    .replacementMask("%S [%sx%e] %t")
                    .documentation("makes sure illegal characters are not included in filename")
-                   .expectedReplacement("Steven Seagal- Lawman [1x1] The Way of the Gun")
+                   .expectedReplacement("Jake Marshall- Lawman [1x1] The Way of the Badge")
                    .build());
-        /**
-         * Ensure that an episode from season 9 of a show, when using "%0s",
-         * produces "09" and not just "9".  Tests fix for
-         * <a href="https://github.com/tvrenamer/tvrenamer/issues/172">Issue 172</a>
-         */
+        // Ensure that season 9 with "%0s" produces "09" not "9"
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("supernatural")
-                   .properShowName("Supernatural")
+                   .filenameShow("shadowcraft")
+                   .properShowName("Shadowcraft")
                    .seasonNumString("9")
                    .episodeNumString("21")
                    .filenameSuffix(".mp4")
-                   .episodeTitle("King of the Damned")
-                   .episodeId("4837871")
+                   .episodeTitle("King of the Fallen")
+                   .episodeId("900003")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Supernatural S09E21 King of the Damned")
+                   .expectedReplacement("Shadowcraft S09E21 King of the Fallen")
                    .build());
     }
 
     @BeforeAll
     public static void setupValuesLongName() {
-        // This example has a very, very long episode title, and yet, still not too long
-        // for us to allow it.  It should be incorporated into the filename untouched.
+        // Very long episode title that still fits in a filename
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("Friends")
-                   .properShowName("Friends")
+                   .filenameShow("Flatmates")
+                   .properShowName("Flatmates")
                    .seasonNumString("05")
                    .episodeNumString("08")
                    .filenameSuffix(".avi")
-                   .episodeTitle("The One With The Thanksgiving Flashbacks"
-                                 + " (a.k.a. The One With All The Thanksgivings)")
+                   .episodeTitle("The One With The Holiday Flashbacks"
+                                 + " (a.k.a. The One With All The Holidays)")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Friends S05E08 The One With The Thanksgiving Flashbacks"
-                                        + " (a.k.a. The One With All The Thanksgivings)")
+                   .expectedReplacement("Flatmates S05E08 The One With The Holiday Flashbacks"
+                                        + " (a.k.a. The One With All The Holidays)")
                    .build());
     }
 
     @BeforeAll
     public static void setupValuesTooLongName() {
-        // This example has an episode title which is simply too long to be included
-        // in a filename.  We should truncate it appropriately.
+        // Episode title too long for a filename — should be truncated
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("Clerks")
-                   .properShowName("Clerks")
+                   .filenameShow("Shopkeepers")
+                   .properShowName("Shopkeepers")
                    .seasonNumString("01")
                    .episodeNumString("05")
                    .filenameSuffix(".mp4")
-                   .episodeTitle("Dante and Randal and Jay and Silent Bob and"
+                   .episodeTitle("Dan and Rick and Jay and Silent Pete and"
                                  + " a Bunch of New Characters and Lando,"
-                                 + " Take Part in a Whole Bunch of Movie Parodies"
-                                 + " Including But Not Exclusive To, The Bad News Bears,"
-                                 + " The Last Starfighter, Indiana Jones and the Temple"
-                                 + " of Doom, Plus a HS Reunion")
+                                 + " Take Part in a Whole Bunch of Genre Parodies"
+                                 + " Including But Not Exclusive To, The Bad News League,"
+                                 + " The Last Pilot, Indiana James and the Temple"
+                                 + " of Gloom, Plus a HS Reunion")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Clerks S01E05 Dante and Randal and Jay and Silent Bob"
-                                        + " and a Bunch of New Characters and Lando, Take")
+                   .expectedReplacement("Shopkeepers S01E05 Dan and Rick and Jay and Silent Pete"
+                                        + " and a Bunch of New Characters and Lando, Take Pa")
                    .build());
     }
 
     @BeforeAll
     public static void setupValuesBadSuffix() {
-        // This example essentially has no filename suffix, in reality.  Instead it has
-        // "junk" after its final dot.  Luckily, it works out just the same.  If we used
-        // an example that had important metadata after its dot, we'd probably fail.
+        // "Junk" after final dot instead of real suffix
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("ncis")
-                   .properShowName("NCIS")
+                   .filenameShow("ntac")
+                   .properShowName("NTAC")
                    .seasonNumString("13")
                    .episodeNumString("04")
                    .filenameSuffix(".hdtv-lol")
                    .episodeTitle("Double Trouble")
-                   .episodeId("5318362")
+                   .episodeId("900004")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("NCIS S13E04 Double Trouble")
+                   .expectedReplacement("NTAC S13E04 Double Trouble")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues03() {
+        // Slash in show name becomes dash
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("nip tuck")
-                   .properShowName("Nip/Tuck")
+                   .filenameShow("cut stitch")
+                   .properShowName("Cut/Stitch")
                    .seasonNumString("6")
                    .episodeNumString("1")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Don Hoberman")
-                   .episodeId("410276")
+                   .episodeId("900005")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Nip-Tuck S06E01 Don Hoberman")
+                   .expectedReplacement("Cut-Stitch S06E01 Don Hoberman")
                    .build());
+        // Parenthetical year in show name
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("human target 2010")
-                   .properShowName("Human Target (2010)")
+                   .filenameShow("moving target 2010")
+                   .properShowName("Moving Target (2010)")
                    .seasonNumString("1")
                    .episodeNumString("2")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Rewind")
-                   .episodeId("1261701")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900006")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Human Target (2010) S01E02 Rewind")
+                   .expectedReplacement("Moving Target (2010) S01E02 Rewind")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("castle 2009")
-                   .properShowName("Castle (2009)")
+                   .filenameShow("fortress 2009")
+                   .properShowName("Fortress (2009)")
                    .seasonNumString("1")
                    .episodeNumString("9")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Little Girl Lost")
-                   .episodeId("445732")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900007")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Castle (2009) S01E09 Little Girl Lost")
+                   .expectedReplacement("Fortress (2009) S01E09 Little Girl Lost")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues04() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("reign 2013")
-                   .properShowName("Reign (2013)")
+                   .filenameShow("crown 2013")
+                   .properShowName("Crown (2013)")
                    .seasonNumString("1")
                    .episodeNumString("20")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Higher Ground")
-                   .episodeId("4818702")
+                   .episodeId("900008")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Reign (2013) S01E20 Higher Ground")
+                   .expectedReplacement("Crown (2013) S01E20 Higher Ground")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("the americans 2013")
-                   .properShowName("The Americans (2013)")
+                   .filenameShow("the operatives 2013")
+                   .properShowName("The Operatives (2013)")
                    .seasonNumString("2")
                    .episodeNumString("10")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Yousaf")
-                   .episodeId("4770469")
+                   .episodeId("900009")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("The Americans (2013) S02E10 Yousaf")
+                   .expectedReplacement("The Operatives (2013) S02E10 Yousaf")
                    .build());
+        // Country suffix in parentheses
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("house of cards us")
-                   .properShowName("House of Cards (US)")
+                   .filenameShow("house of mirrors us")
+                   .properShowName("House of Mirrors (US)")
                    .seasonNumString("1")
                    .episodeNumString("6")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Chapter 6")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("House of Cards (US) S01E06 Chapter 6")
+                   .expectedReplacement("House of Mirrors (US) S01E06 Chapter 6")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues05() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("modern family")
-                   .properShowName("Modern Family")
+                   .filenameShow("blended family")
+                   .properShowName("Blended Family")
                    .seasonNumString("5")
                    .episodeNumString("12")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Under Pressure")
-                   .episodeId("4731166")
+                   .episodeId("900010")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Modern Family S05E12 Under Pressure")
+                   .expectedReplacement("Blended Family S05E12 Under Pressure")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("game of thrones")
-                   .properShowName("Game of Thrones")
+                   .filenameShow("realm of shadows")
+                   .properShowName("Realm of Shadows")
                    .seasonNumString("5")
                    .episodeNumString("1")
                    .filenameSuffix(".mp4")
                    .episodeTitle("The Wars to Come")
-                   .episodeId("5083694")
+                   .episodeId("900011")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Game of Thrones S05E01 The Wars to Come")
+                   .expectedReplacement("Realm of Shadows S05E01 The Wars to Come")
                    .build());
+        // Numeric show name; colons in episode title become dashes
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("24")
-                   .properShowName("24")
+                   .filenameShow("42")
+                   .properShowName("42")
                    .seasonNumString("8")
                    .episodeNumString("1")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Day 8: 4:00 P.M. - 5:00 P.M.")
-                   .episodeId("806851")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900012")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("24 S08E01 Day 8- 4-00 P.M. - 5-00 P.M.")
+                   .expectedReplacement("42 S08E01 Day 8- 4-00 P.M. - 5-00 P.M.")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues06() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("24")
-                   .properShowName("24")
+                   .filenameShow("42")
+                   .properShowName("42")
                    .seasonNumString("7")
                    .episodeNumString("18")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Day 7: 1:00 A.M. - 2:00 A.M.")
-                   .episodeId("423760")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900013")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("24 S07E18 Day 7- 1-00 A.M. - 2-00 A.M.")
+                   .expectedReplacement("42 S07E18 Day 7- 1-00 A.M. - 2-00 A.M.")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("dexter")
-                   .properShowName("Dexter")
+                   .filenameShow("ashford")
+                   .properShowName("Ashford")
                    .seasonNumString("4")
                    .episodeNumString("7")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Slack Tide")
-                   .episodeId("997661")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900014")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Dexter S04E07 Slack Tide")
+                   .expectedReplacement("Ashford S04E07 Slack Tide")
                    .build());
+        // All-caps acronym show name; parenthetical in episode title
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("jag")
-                   .properShowName("JAG")
+                   .filenameShow("tac")
+                   .properShowName("TAC")
                    .seasonNumString("10")
                    .episodeNumString("1")
                    .filenameSuffix(".avi")
                    .episodeTitle("Hail and Farewell, Part II (2)")
-                   .episodeId("126483")
+                   .episodeId("900015")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("JAG S10E01 Hail and Farewell, Part II (2)")
+                   .expectedReplacement("TAC S10E01 Hail and Farewell, Part II (2)")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues07() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("lost")
-                   .properShowName("Lost")
+                   .filenameShow("found")
+                   .properShowName("Found")
                    .seasonNumString("6")
                    .episodeNumString("5")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Lighthouse")
-                   .episodeId("1155311")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900016")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Lost S06E05 Lighthouse")
+                   .expectedReplacement("Found S06E05 Lighthouse")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("warehouse 13")
-                   .properShowName("Warehouse 13")
+                   .filenameShow("depot 17")
+                   .properShowName("Depot 17")
                    .seasonNumString("1")
                    .episodeNumString("1")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Pilot")
-                   .episodeId("600981")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900017")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Warehouse 13 S01E01 Pilot")
+                   .expectedReplacement("Depot 17 S01E01 Pilot")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("one tree hill")
-                   .properShowName("One Tree Hill")
+                   .filenameShow("two river road")
+                   .properShowName("Two River Road")
                    .seasonNumString("7")
                    .episodeNumString("14")
                    .filenameSuffix(".avi")
                    .episodeTitle("Family Affair")
-                   .episodeId("1446541")
+                   .episodeId("900018")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("One Tree Hill S07E14 Family Affair")
+                   .expectedReplacement("Two River Road S07E14 Family Affair")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues08() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("gossip girl")
-                   .properShowName("Gossip Girl")
+                   .filenameShow("rumour mill")
+                   .properShowName("Rumour Mill")
                    .seasonNumString("3")
                    .episodeNumString("15")
                    .filenameSuffix(".avi")
-                   .episodeTitle("The Sixteen Year Old Virgin")
-                   .episodeId("1311951")
+                   .episodeTitle("The Sixteen Year Old Question")
+                   .episodeId("900019")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Gossip Girl S03E15 The Sixteen Year Old Virgin")
+                   .expectedReplacement("Rumour Mill S03E15 The Sixteen Year Old Question")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("smallville")
-                   .properShowName("Smallville")
+                   .filenameShow("brookfield")
+                   .properShowName("Brookfield")
                    .seasonNumString("9")
                    .episodeNumString("14")
                    .filenameSuffix(".avi")
                    .episodeTitle("Conspiracy")
-                   .episodeId("1286161")
+                   .episodeId("900020")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Smallville S09E14 Conspiracy")
+                   .expectedReplacement("Brookfield S09E14 Conspiracy")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("smallville")
-                   .properShowName("Smallville")
+                   .filenameShow("brookfield")
+                   .properShowName("Brookfield")
                    .seasonNumString("9")
                    .episodeNumString("15")
                    .filenameSuffix(".avi")
                    .episodeTitle("Escape")
-                   .episodeId("1231561")
+                   .episodeId("900021")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Smallville S09E15 Escape")
+                   .expectedReplacement("Brookfield S09E15 Escape")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues09() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("the big bang theory")
-                   .properShowName("The Big Bang Theory")
+                   .filenameShow("the cosmic array theory")
+                   .properShowName("The Cosmic Array Theory")
                    .seasonNumString("3")
                    .episodeNumString("18")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("The Pants Alternative")
-                   .episodeId("1801741")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900022")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("The Big Bang Theory S03E18 The Pants Alternative")
+                   .expectedReplacement("The Cosmic Array Theory S03E18 The Pants Alternative")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("dexter")
-                   .properShowName("Dexter")
+                   .filenameShow("ashford")
+                   .properShowName("Ashford")
                    .seasonNumString("5")
                    .episodeNumString("5")
                    .filenameSuffix(".mkv")
-                   .episodeTitle("First Blood")
-                   .episodeId("2460921")
+                   .episodeTitle("First Light")
+                   .episodeId("900023")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Dexter S05E05 First Blood")
+                   .expectedReplacement("Ashford S05E05 First Light")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("lost")
-                   .properShowName("Lost")
+                   .filenameShow("found")
+                   .properShowName("Found")
                    .seasonNumString("2")
                    .episodeNumString("7")
                    .filenameSuffix(".mkv")
                    .episodeTitle("The Other 48 Days")
-                   .episodeId("304796")
+                   .episodeId("900024")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Lost S02E07 The Other 48 Days")
+                   .expectedReplacement("Found S02E07 The Other 48 Days")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues10() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("californication")
-                   .properShowName("Californication")
+                   .filenameShow("hollywoodland")
+                   .properShowName("Hollywoodland")
                    .seasonNumString("7")
                    .episodeNumString("4")
                    .filenameSuffix(".mp4")
-                   .episodeTitle("Dicks")
-                   .episodeId("4840650")
+                   .episodeTitle("Punchline")
+                   .episodeId("900025")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Californication S07E04 Dicks")
+                   .expectedReplacement("Hollywoodland S07E04 Punchline")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("continuum")
-                   .properShowName("Continuum")
+                   .filenameShow("nexus point")
+                   .properShowName("Nexus Point")
                    .seasonNumString("3")
                    .episodeNumString("7")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Waning Minutes")
-                   .episodeId("4833023")
+                   .episodeId("900026")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Continuum S03E07 Waning Minutes")
+                   .expectedReplacement("Nexus Point S03E07 Waning Minutes")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("elementary")
-                   .properShowName("Elementary")
+                   .filenameShow("deductive")
+                   .properShowName("Deductive")
                    .seasonNumString("2")
                    .episodeNumString("23")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Art in the Blood")
-                   .episodeId("4833389")
+                   .episodeId("900027")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Elementary S02E23 Art in the Blood")
+                   .expectedReplacement("Deductive S02E23 Art in the Blood")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues11() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("family guy")
-                   .properShowName("Family Guy")
+                   .filenameShow("neighbourhood dad")
+                   .properShowName("Neighbourhood Dad")
                    .seasonNumString("12")
                    .episodeNumString("19")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Meg Stinks!")
-                   .episodeId("4840967")
+                   .episodeId("900028")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Family Guy S12E19 Meg Stinks!")
+                   .expectedReplacement("Neighbourhood Dad S12E19 Meg Stinks!")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("fargo")
-                   .properShowName("Fargo")
+                   .filenameShow("duluth")
+                   .properShowName("Duluth")
                    .seasonNumString("1")
                    .episodeNumString("1")
                    .filenameSuffix(".mp4")
                    .episodeTitle("The Crocodile's Dilemma")
-                   .episodeId("4626050")
+                   .episodeId("900029")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Fargo S01E01 The Crocodile's Dilemma")
+                   .expectedReplacement("Duluth S01E01 The Crocodile's Dilemma")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("girls")
-                   .properShowName("Girls")
+                   .filenameShow("gals")
+                   .properShowName("Gals")
                    .seasonNumString("3")
                    .episodeNumString("11")
                    .filenameSuffix(".mp4")
                    .episodeTitle("I Saw You")
-                   .episodeId("4756574")
+                   .episodeId("900030")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Girls S03E11 I Saw You")
+                   .expectedReplacement("Gals S03E11 I Saw You")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues12() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("grimm")
-                   .properShowName("Grimm")
+                   .filenameShow("fable")
+                   .properShowName("Fable")
                    .seasonNumString("3")
                    .episodeNumString("19")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Nobody Knows the Trubel I've Seen")
-                   .episodeId("4806887")
+                   .episodeId("900031")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Grimm S03E19 Nobody Knows the Trubel I've Seen")
+                   .expectedReplacement("Fable S03E19 Nobody Knows the Trubel I've Seen")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("new girl")
-                   .properShowName("New Girl")
+                   .filenameShow("new gal")
+                   .properShowName("New Gal")
                    .seasonNumString("3")
                    .episodeNumString("23")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Cruise")
-                   .episodeId("4818762")
+                   .episodeId("900032")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("New Girl S03E23 Cruise")
+                   .expectedReplacement("New Gal S03E23 Cruise")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("nurse jackie")
-                   .properShowName("Nurse Jackie")
+                   .filenameShow("doctor hale")
+                   .properShowName("Doctor Hale")
                    .seasonNumString("6")
                    .episodeNumString("4")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Jungle Love")
-                   .episodeId("4818766")
+                   .episodeId("900033")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Nurse Jackie S06E04 Jungle Love")
+                   .expectedReplacement("Doctor Hale S06E04 Jungle Love")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues13() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("offspring")
-                   .properShowName("Offspring")
+                   .filenameShow("progeny")
+                   .properShowName("Progeny")
                    .seasonNumString("5")
                    .episodeNumString("1")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Back in the Game")
-                   .episodeId("4856111")
+                   .episodeId("900034")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Offspring S05E01 Back in the Game")
+                   .expectedReplacement("Progeny S05E01 Back in the Game")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("robot chicken")
-                   .properShowName("Robot Chicken")
+                   .filenameShow("tin rooster")
+                   .properShowName("Tin Rooster")
                    .seasonNumString("7")
                    .episodeNumString("4")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Rebel Appliance")
-                   .episodeId("4874676")
+                   .episodeId("900035")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Robot Chicken S07E04 Rebel Appliance")
+                   .expectedReplacement("Tin Rooster S07E04 Rebel Appliance")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues14() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("the big bang theory")
-                   .properShowName("The Big Bang Theory")
+                   .filenameShow("the cosmic array theory")
+                   .properShowName("The Cosmic Array Theory")
                    .seasonNumString("7")
                    .episodeNumString("23")
                    .filenameSuffix(".mp4")
                    .episodeTitle("The Gorilla Dissolution")
-                   .episodeId("4840953")
+                   .episodeId("900036")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("The Big Bang Theory S07E23 The Gorilla Dissolution")
+                   .expectedReplacement("The Cosmic Array Theory S07E23 The Gorilla Dissolution")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("the good wife")
-                   .properShowName("The Good Wife")
+                   .filenameShow("the good counsel")
+                   .properShowName("The Good Counsel")
                    .seasonNumString("5")
                    .episodeNumString("20")
                    .filenameSuffix(".mp4")
                    .episodeTitle("The Deep Web")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("The Good Wife S05E20 The Deep Web")
+                   .expectedReplacement("The Good Counsel S05E20 The Deep Web")
                    .build());
         values.add(new EpisodeTestData.Builder()
                    .filenameShow("veep")
-                   .properShowName("Veep")
+                   .properShowName("POTUS")
                    .seasonNumString("3")
                    .episodeNumString("5")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Fishing")
-                   .episodeId("4833100")
+                   .episodeId("900037")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Veep S03E05 Fishing")
+                   .expectedReplacement("POTUS S03E05 Fishing")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues15() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("witches of east end")
-                   .properShowName("Witches of East End")
+                   .filenameShow("casters of north cove")
+                   .properShowName("Casters of North Cove")
                    .seasonNumString("1")
                    .episodeNumString("1")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Pilot")
-                   .episodeId("4536811")
+                   .episodeId("900038")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Witches of East End S01E01 Pilot")
+                   .expectedReplacement("Casters of North Cove S01E01 Pilot")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("warehouse 13")
-                   .properShowName("Warehouse 13")
+                   .filenameShow("depot 17")
+                   .properShowName("Depot 17")
                    .seasonNumString("5")
                    .episodeNumString("4")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Savage Seduction")
-                   .episodeId("4835105")
+                   .episodeId("900039")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Warehouse 13 S05E04 Savage Seduction")
+                   .expectedReplacement("Depot 17 S05E04 Savage Seduction")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("the 100")
-                   .properShowName("The 100")
+                   .filenameShow("the 200")
+                   .properShowName("The 200")
                    .seasonNumString("2")
                    .episodeNumString("8")
                    .filenameSuffix(".mp4")
                    .episodeTitle("Spacewalker")
-                   .episodeId("5044973")
+                   .episodeId("900040")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("The 100 S02E08 Spacewalker")
+                   .expectedReplacement("The 200 S02E08 Spacewalker")
                    .build());
     }
 
     @BeforeAll
-    public static void setupValuesFirefly1() {
+    public static void setupValuesStarhopper1() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("1")
-                   .episodeId("297999")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Serenity")
+                   .filenameShow("starhopper")
+                   .properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("1").episodeId("900101")
+                   .filenameSuffix(".mp4").episodeTitle("Serenity")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E01 Serenity")
-                   .build());
+                   .expectedReplacement("Starhopper S01E01 Serenity").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("2")
-                   .episodeId("297989")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("The Train Job")
+                   .filenameShow("starhopper")
+                   .properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("2").episodeId("900102")
+                   .filenameSuffix(".mp4").episodeTitle("The Cargo Run")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E02 The Train Job")
-                   .build());
+                   .expectedReplacement("Starhopper S01E02 The Cargo Run").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("3")
-                   .episodeId("297990")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Bushwhacked")
+                   .filenameShow("starhopper")
+                   .properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("3").episodeId("900103")
+                   .filenameSuffix(".mp4").episodeTitle("Bushwhacked")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E03 Bushwhacked")
-                   .build());
+                   .expectedReplacement("Starhopper S01E03 Bushwhacked").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("4")
-                   .episodeId("297994")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Shindig")
+                   .filenameShow("starhopper")
+                   .properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("4").episodeId("900104")
+                   .filenameSuffix(".mp4").episodeTitle("Shindig")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E04 Shindig")
-                   .build());
+                   .expectedReplacement("Starhopper S01E04 Shindig").build());
     }
 
     @BeforeAll
-    public static void setupValuesFirefly2() {
+    public static void setupValuesStarhopper2() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("5")
-                   .episodeId("297995")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Safe")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("5").episodeId("900105")
+                   .filenameSuffix(".mp4").episodeTitle("Safe")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E05 Safe")
-                   .build());
+                   .expectedReplacement("Starhopper S01E05 Safe").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("6")
-                   .episodeId("297991")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Our Mrs. Reynolds")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("6").episodeId("900106")
+                   .filenameSuffix(".mp4").episodeTitle("Our Mrs. Reynolds")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E06 Our Mrs. Reynolds")
-                   .build());
+                   .expectedReplacement("Starhopper S01E06 Our Mrs. Reynolds").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("7")
-                   .episodeId("297992")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Jaynestown")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("7").episodeId("900107")
+                   .filenameSuffix(".mp4").episodeTitle("Jaynestown")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E07 Jaynestown")
-                   .build());
+                   .expectedReplacement("Starhopper S01E07 Jaynestown").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("8")
-                   .episodeId("297993")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Out of Gas")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("8").episodeId("900108")
+                   .filenameSuffix(".mp4").episodeTitle("Out of Gas")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E08 Out of Gas")
-                   .build());
+                   .expectedReplacement("Starhopper S01E08 Out of Gas").build());
     }
 
     @BeforeAll
-    public static void setupValuesFirefly3() {
+    public static void setupValuesStarhopper3() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("9")
-                   .episodeId("297996")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Ariel")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("9").episodeId("900109")
+                   .filenameSuffix(".mp4").episodeTitle("Ariel")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E09 Ariel")
-                   .build());
+                   .expectedReplacement("Starhopper S01E09 Ariel").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("10")
-                   .episodeId("297997")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("War Stories")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("10").episodeId("900110")
+                   .filenameSuffix(".mp4").episodeTitle("War Stories")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E10 War Stories")
-                   .build());
+                   .expectedReplacement("Starhopper S01E10 War Stories").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("11")
-                   .episodeId("298002")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Trash")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("11").episodeId("900111")
+                   .filenameSuffix(".mp4").episodeTitle("Trash")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E11 Trash")
-                   .build());
+                   .expectedReplacement("Starhopper S01E11 Trash").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("12")
-                   .episodeId("298003")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("The Message")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("12").episodeId("900112")
+                   .filenameSuffix(".mp4").episodeTitle("The Message")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E12 The Message")
-                   .build());
+                   .expectedReplacement("Starhopper S01E12 The Message").build());
     }
 
     @BeforeAll
-    public static void setupValuesFirefly4() {
+    public static void setupValuesStarhopper4() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("13")
-                   .episodeId("298001")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Heart of Gold")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("13").episodeId("900113")
+                   .filenameSuffix(".mp4").episodeTitle("Heart of Gold")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E13 Heart of Gold")
-                   .build());
+                   .expectedReplacement("Starhopper S01E13 Heart of Gold").build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("firefly")
-                   .properShowName("Firefly")
-                   .seasonNumString("1")
-                   .episodeNumString("14")
-                   .episodeId("297998")
-                   .filenameSuffix(".mp4")
-                   .episodeTitle("Objects in Space")
+                   .filenameShow("starhopper").properShowName("Starhopper")
+                   .seasonNumString("1").episodeNumString("14").episodeId("900114")
+                   .filenameSuffix(".mp4").episodeTitle("Objects in Space")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Firefly S01E14 Objects in Space")
-                   .build());
+                   .expectedReplacement("Starhopper S01E14 Objects in Space").build());
     }
 
     @BeforeAll
     public static void setupValues17() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("strike back")
-                   .properShowName("Strike Back")
+                   .filenameShow("hit hard")
+                   .properShowName("Hit Hard")
                    .seasonNumString("1")
                    .episodeNumString("1")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
-                   .episodeTitle("Chris Ryan's Strike Back, Episode 1")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeTitle("Ryan's Hit Hard, Episode 1")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Strike Back S01E01 Chris Ryan's Strike Back, Episode 1")
+                   .expectedReplacement("Hit Hard S01E01 Ryan's Hit Hard, Episode 1")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("lucifer")
-                   .properShowName("Lucifer")
+                   .filenameShow("mephisto")
+                   .properShowName("Mephisto")
                    .seasonNumString("2")
                    .episodeNumString("3")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Sin-Eater")
-                   .episodeId("5684178")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900041")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Lucifer S02E03 Sin-Eater")
+                   .expectedReplacement("Mephisto S02E03 Sin-Eater")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues18() {
+        // Apostrophe and dots in show name
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("marvels agents of shield")
-                   .properShowName("Marvel's Agents of S.H.I.E.L.D.")
+                   .filenameShow("vanguards agents of defend")
+                   .properShowName("Vanguard's Agents of D.E.F.E.N.D.")
                    .seasonNumString("4")
                    .episodeNumString("3")
                    .filenameSuffix(".mkv")
                    .episodeResolution("1080p")
                    .episodeTitle("Uprising")
-                   .episodeId("5757555")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900042")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Marvel's Agents of S.H.I.E.L.D. S04E03 Uprising")
+                   .expectedReplacement("Vanguard's Agents of D.E.F.E.N.D. S04E03 Uprising")
                    .build());
+        // Same show, different resolutions
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("supernatural")
-                   .properShowName("Supernatural")
+                   .filenameShow("shadowcraft")
+                   .properShowName("Shadowcraft")
                    .seasonNumString("11")
                    .episodeNumString("22")
                    .filenameSuffix(".mkv")
-                   .showId("78901")
-                   .episodeId("5590688")
+                   .showId("90003")
+                   .episodeId("900043")
                    .episodeResolution("1080p")
                    .episodeTitle("We Happy Few")
-                   // .replacementMask("%S [%sx%e] %t %r")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Supernatural S11E22 We Happy Few")
+                   .expectedReplacement("Shadowcraft S11E22 We Happy Few")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("supernatural")
-                   .properShowName("Supernatural")
+                   .filenameShow("shadowcraft")
+                   .properShowName("Shadowcraft")
                    .seasonNumString("11")
                    .episodeNumString("22")
                    .filenameSuffix(".mkv")
-                   .showId("78901")
-                   .episodeId("5590688")
+                   .showId("90003")
+                   .episodeId("900043")
                    .episodeResolution("720p")
                    .episodeTitle("We Happy Few")
-                   // .replacementMask("%S [%sx%e] %t %r")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Supernatural S11E22 We Happy Few")
+                   .expectedReplacement("Shadowcraft S11E22 We Happy Few")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues19() {
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("channel zero")
-                   .properShowName("Channel Zero")
+                   .filenameShow("signal void")
+                   .properShowName("Signal Void")
                    .seasonNumString("1")
                    .episodeNumString("1")
                    .filenameSuffix(".mkv")
                    .episodeResolution("480p")
                    .episodeTitle("You Have to Go Inside")
-                   .episodeId("5700172")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900044")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("Channel Zero S01E01 You Have to Go Inside")
+                   .expectedReplacement("Signal Void S01E01 You Have to Go Inside")
                    .build());
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("ncis")
-                   .properShowName("NCIS")
+                   .filenameShow("ntac")
+                   .properShowName("NTAC")
                    .seasonNumString("14")
                    .episodeNumString("4")
                    .filenameSuffix(".mkv")
                    .episodeResolution("720p")
                    .episodeTitle("Love Boat")
-                   .episodeId("5719479")
-                   // .replacementMask("%S [%sx%e] %t %r")
+                   .episodeId("900045")
                    .replacementMask("%S S%0sE%0e %t")
-                   .expectedReplacement("NCIS S14E04 Love Boat")
+                   .expectedReplacement("NTAC S14E04 Love Boat")
                    .build());
     }
 
     @BeforeAll
     public static void setupValues20() {
+        // Very high season number; dot-separated replacement mask
         values.add(new EpisodeTestData.Builder()
-                   .filenameShow("House Hunters International")
-                   .properShowName("House Hunters International")
+                   .filenameShow("Home Seekers International")
+                   .properShowName("Home Seekers International")
                    .seasonNumString("103")
                    .episodeNumString("02")
                    .filenameSuffix(".mkv")
                    .episodeResolution("")
                    .episodeTitle("Copenhagen Dreaming")
-                   .episodeId("5941334")
+                   .episodeId("900046")
                    .replacementMask("%S.S%0sE%0e.%t")
-                   .expectedReplacement("House Hunters International.S103E02.Copenhagen Dreaming")
+                   .expectedReplacement("Home Seekers International.S103E02.Copenhagen Dreaming")
                    .build());
     }
 
-    /**
-     * This is, officially, the Test that checks all the EpisodeTestData, though really it's just
-     * a driver method.  All the real work goes on in <code>getReplacementBasename</code>, above.
-     *
-     * Here's where all that data in <code>values</code> is turned into something.  Note this
-     * doesn't use a lot of what the real program does; it doesn't fetch anything from the
-     * Internet (or even from a cache), and it doesn't use listeners.  And, of course, it doesn't
-     * use the UI, which is intimately tied to moving files in the real program.  But it does try
-     * to simulate the process.
-     *
-     * We start off by making sure our preferences are what we want, because the replacement
-     * mask is part of the test data.  Then we get use the EpisodeTestData to create and
-     * fill in all the data for a FileEpisode.  (In the real program, the parser
-     * in FilenameParser is used for this.)
-     *
-     * This is the method where the expected and actual values are compared.
-     */
     @Test
     public void testGetReplacementText() {
         prefs.setRenameSelected(true);
         prefs.setMoveSelected(false);
-        List<Path> testFiles = new ArrayList<>();
         for (EpisodeTestData data : values) {
             try {
-                Path path = OUR_TEMP_DIR.resolve(data.inputFilename);
-                testFiles.add(path);
-
                 prefs.setRenameReplacementString(data.replacementMask);
 
-                FileEpisode episode = data.createFileEpisode(OUR_TEMP_DIR);
+                FileEpisode episode = data.createFileEpisode(tempDir);
                 assertEquals(data.filenameSuffix, episode.getFilenameSuffix(),
                              "suffix fail on " + data.inputFilename);
                 assertEquals(data.expectedReplacement, episode.getRenamedBasename(0),
                              "test which " + data.documentation);
             } catch (Exception e) {
                 verboseFail("testing " + data, e);
-            }
-        }
-        teardown(testFiles);
-    }
-
-    /**
-     * The tests are actually expected to clean up after themselves properly.
-     * The <code>teardown</code> method is used for that, and checks things
-     * every step of the way.  But if it fails, we still would like to try
-     * to leave the world the way we left it.  This is straightforward to do
-     * if we stuck with the rule of doing everything inside OUR_TEMP_DIR.
-     * Try to basically do an <code>/bin/rm -rf</code> on our temp directory.
-     */
-    @AfterEach
-    public void cleanUp() {
-        if (Files.exists(OUR_TEMP_DIR)) {
-            logger.warning("trying to clean up " + OUR_TEMP_DIR);
-            try {
-                Files.walkFileTree(OUR_TEMP_DIR, new FileDeleter());
-            } catch (IOException e) {
-                verboseFail("unable to clean up leftover directory " + OUR_TEMP_DIR, e);
             }
         }
     }

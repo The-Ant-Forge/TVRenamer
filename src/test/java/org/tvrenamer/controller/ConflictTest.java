@@ -29,19 +29,19 @@ import org.tvrenamer.model.util.Constants;
  */
 public class ConflictTest extends MoveTest {
 
-    private static final EpisodeTestData bigBang0322 =
+    private static final EpisodeTestData cosmicArray0322 =
         new EpisodeTestData.Builder()
-            .inputFilename("big.bang.theory.322.mp4")
-            .filenameShow("big.bang.theory")
-            .properShowName("The Big Bang Theory")
+            .inputFilename("cosmic.array.theory.322.mp4")
+            .filenameShow("cosmic.array.theory")
+            .properShowName("The Cosmic Array Theory")
             .seasonNumString("3")
             .episodeNumString("22")
             .filenameSuffix(".mp4")
             .episodeTitle("The Staircase Implementation")
-            .episodeId("2063661")
+            .episodeId("900201")
             .replacementMask("%S S%0sE%0e %t")
             .expectedReplacement(
-                "The Big Bang Theory S03E22 The Staircase Implementation"
+                "The Cosmic Array Theory S03E22 The Staircase Implementation"
             )
             .build();
 
@@ -73,7 +73,7 @@ public class ConflictTest extends MoveTest {
 
     @Test
     public void testFileMoverConflict() {
-        setValues(bigBang0322);
+        setValues(cosmicArray0322);
         assertReady();
 
         // Default behavior now preserves original modification time.
@@ -85,7 +85,7 @@ public class ConflictTest extends MoveTest {
         }
 
         FileMover mover = new FileMover(episode);
-        makeConflict(bigBang0322, mover);
+        makeConflict(cosmicArray0322, mover);
         mover.call();
 
         assertMoved();
@@ -96,11 +96,11 @@ public class ConflictTest extends MoveTest {
     public void testMoveRunnerWithConflict() {
         final CompletableFuture<Boolean> future = new CompletableFuture<>();
 
-        setValues(bigBang0322);
+        setValues(cosmicArray0322);
         assertReady();
 
         FileMover mover = new FileMover(episode);
-        makeConflict(bigBang0322, mover);
+        makeConflict(cosmicArray0322, mover);
         mover.addObserver(new FutureCompleter(future));
 
         List<FileMover> moveList = new ArrayList<>();
@@ -113,12 +113,12 @@ public class ConflictTest extends MoveTest {
     public void testMoveRunnerWithTwoConflicts() {
         final CompletableFuture<Boolean> future = new CompletableFuture<>();
 
-        setValues(bigBang0322);
+        setValues(cosmicArray0322);
         assertReady();
 
         FileMover mover = new FileMover(episode);
-        makeConflict(bigBang0322, mover);
-        makeConflict(bigBang0322, mover);
+        makeConflict(cosmicArray0322, mover);
+        makeConflict(cosmicArray0322, mover);
         mover.addObserver(new FutureCompleter(future));
 
         List<FileMover> moveList = new ArrayList<>();
@@ -131,13 +131,13 @@ public class ConflictTest extends MoveTest {
     public void testMoveRunnerWithThreeConflicts() {
         final CompletableFuture<Boolean> future = new CompletableFuture<>();
 
-        setValues(bigBang0322);
+        setValues(cosmicArray0322);
         assertReady();
 
         FileMover mover = new FileMover(episode);
-        makeConflict(bigBang0322, mover);
-        makeConflict(bigBang0322, mover);
-        makeConflict(bigBang0322, mover);
+        makeConflict(cosmicArray0322, mover);
+        makeConflict(cosmicArray0322, mover);
+        makeConflict(cosmicArray0322, mover);
         mover.addObserver(new FutureCompleter(future));
 
         List<FileMover> moveList = new ArrayList<>();

@@ -74,16 +74,16 @@ public class MoveTest {
         FileMover.logger.setLevel(savedLogLevel);
     }
 
-    private static final EpisodeTestData robotChicken0704 =
+    private static final EpisodeTestData tinRooster0704 =
         new EpisodeTestData.Builder()
-            .inputFilename("robot chicken/7x04.Rebel.Appliance.mp4")
-            .filenameShow("robot chicken")
-            .properShowName("Robot Chicken")
+            .inputFilename("tin rooster/7x04.Rebel.Appliance.mp4")
+            .filenameShow("tin rooster")
+            .properShowName("Tin Rooster")
             .seasonNumString("7")
             .episodeNumString("04")
             .filenameSuffix(".mp4")
             .episodeTitle("Rebel Appliance")
-            .episodeId("4874676")
+            .episodeId("900202")
             .replacementMask("S%0sE%0e %t")
             .expectedReplacement("S07E04 Rebel Appliance")
             .build();
@@ -195,7 +195,7 @@ public class MoveTest {
 
     @Test
     public void testFileMover() {
-        setValues(robotChicken0704);
+        setValues(tinRooster0704);
         assertReady();
 
         // Default behavior now preserves original modification time.
@@ -215,7 +215,7 @@ public class MoveTest {
 
     @Test
     public void testFileMoverCannotMove() {
-        setValues(robotChicken0704);
+        setValues(tinRooster0704);
 
         // Pragmatic: on some platforms (especially Windows), we cannot reliably enforce
         // read-only behavior in unit tests without ACL manipulation. If we can't make the
@@ -322,7 +322,7 @@ public class MoveTest {
     public void testMoveRunner() {
         final CompletableFuture<Boolean> future = new CompletableFuture<>();
 
-        setValues(robotChicken0704);
+        setValues(tinRooster0704);
         assertReady();
 
         FileMover mover = new FileMover(episode);
@@ -338,7 +338,7 @@ public class MoveTest {
     public void testMoveRunnerCannotMove() {
         final CompletableFuture<Boolean> future = new CompletableFuture<>();
 
-        setValues(robotChicken0704);
+        setValues(tinRooster0704);
 
         // Pragmatic: on some platforms (especially Windows), we cannot reliably enforce
         // read-only behavior in unit tests without ACL manipulation. If we can't make the

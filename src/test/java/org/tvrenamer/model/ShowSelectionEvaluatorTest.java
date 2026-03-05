@@ -20,41 +20,41 @@ import java.util.List;
  */
 public class ShowSelectionEvaluatorTest {
 
-    // Test data - reusable ShowOptions
-    private static ShowOption GAME_OF_THRONES;
-    private static ShowOption GAME_OF_THRONES_2011;
-    private static ShowOption THE_OFFICE_US;
-    private static ShowOption THE_OFFICE_UK;
-    private static ShowOption THE_OFFICE;
-    private static ShowOption NIGHT_MANAGER;
-    private static ShowOption NIGHT_MANAGER_IN;
-    private static ShowOption NIGHT_MANAGER_CN;
-    private static ShowOption SHIELD_WITH_ALIAS;
-    private static ShowOption DOCTOR_WHO;
-    private static ShowOption DOCTOR_WHO_2005;
+    // Test data - reusable ShowOptions (all fictional names)
+    private static ShowOption REALM_OF_SHADOWS;
+    private static ShowOption REALM_OF_SHADOWS_2011;
+    private static ShowOption THE_BUREAU_US;
+    private static ShowOption THE_BUREAU_UK;
+    private static ShowOption THE_BUREAU;
+    private static ShowOption NIGHT_SHIFT;
+    private static ShowOption NIGHT_SHIFT_IN;
+    private static ShowOption NIGHT_SHIFT_CN;
+    private static ShowOption DEFEND_WITH_ALIAS;
+    private static ShowOption TIME_LORD;
+    private static ShowOption TIME_LORD_2005;
     private static ShowOption SOME_SHOW_2010;
     private static ShowOption SOME_SHOW_2015;
 
     @BeforeAll
     static void setupTestData() {
-        GAME_OF_THRONES = new ShowOption("121361", "Game of Thrones");
-        GAME_OF_THRONES_2011 = new ShowOption("121361", "Game of Thrones", 2011, Collections.emptyList());
-        THE_OFFICE_US = new ShowOption("73244", "The Office (US)");
-        THE_OFFICE_UK = new ShowOption("78107", "The Office (UK)");
-        THE_OFFICE = new ShowOption("73244", "The Office");
-        NIGHT_MANAGER = new ShowOption("305288", "The Night Manager");
-        NIGHT_MANAGER_IN = new ShowOption("305289", "The Night Manager (IN)");
-        NIGHT_MANAGER_CN = new ShowOption("305290", "The Night Manager (CN)");
-        SHIELD_WITH_ALIAS = new ShowOption(
-            "263365",
-            "Marvel's Agents of S.H.I.E.L.D.",
+        REALM_OF_SHADOWS = new ShowOption("90101", "Realm of Shadows");
+        REALM_OF_SHADOWS_2011 = new ShowOption("90101", "Realm of Shadows", 2011, Collections.emptyList());
+        THE_BUREAU_US = new ShowOption("90102", "The Bureau (US)");
+        THE_BUREAU_UK = new ShowOption("90103", "The Bureau (UK)");
+        THE_BUREAU = new ShowOption("90102", "The Bureau");
+        NIGHT_SHIFT = new ShowOption("90104", "The Night Shift");
+        NIGHT_SHIFT_IN = new ShowOption("90105", "The Night Shift (IN)");
+        NIGHT_SHIFT_CN = new ShowOption("90106", "The Night Shift (CN)");
+        DEFEND_WITH_ALIAS = new ShowOption(
+            "90107",
+            "Vanguard's Agents of D.E.F.E.N.D.",
             2013,
-            Arrays.asList("Agents of SHIELD", "SHIELD", "Marvel's Agents of Shield")
+            Arrays.asList("Agents of DEFEND", "DEFEND", "Vanguard's Agents of Defend")
         );
-        DOCTOR_WHO = new ShowOption("1", "Doctor Who");
-        DOCTOR_WHO_2005 = new ShowOption("2", "Doctor Who (2005)");
-        SOME_SHOW_2010 = new ShowOption("1", "Some Show", 2010, Collections.emptyList());
-        SOME_SHOW_2015 = new ShowOption("2", "Some Show", 2015, Collections.emptyList());
+        TIME_LORD = new ShowOption("90108", "Time Lord");
+        TIME_LORD_2005 = new ShowOption("90109", "Time Lord (2005)");
+        SOME_SHOW_2010 = new ShowOption("90110", "Some Show", 2010, Collections.emptyList());
+        SOME_SHOW_2015 = new ShowOption("90111", "Some Show", 2015, Collections.emptyList());
     }
 
     // ========== NOT_FOUND Tests ==========
@@ -63,7 +63,7 @@ public class ShowSelectionEvaluatorTest {
     @DisplayName("Null candidates should return NOT_FOUND")
     void testNullCandidates() {
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Game of Thrones", null, null);
+            ShowSelectionEvaluator.evaluate("Realm of Shadows", null, null);
 
         assertEquals(NOT_FOUND, decision.getType());
         assertNull(decision.getChosen());
@@ -76,7 +76,7 @@ public class ShowSelectionEvaluatorTest {
     @DisplayName("Empty candidates should return NOT_FOUND")
     void testEmptyCandidates() {
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Game of Thrones", Collections.emptyList(), null);
+            ShowSelectionEvaluator.evaluate("Realm of Shadows", Collections.emptyList(), null);
 
         assertEquals(NOT_FOUND, decision.getType());
         assertNull(decision.getChosen());
@@ -88,39 +88,39 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Pinned ID matching a candidate should return RESOLVED")
     void testPinnedIdMatch() {
-        List<ShowOption> options = Arrays.asList(THE_OFFICE_US, THE_OFFICE_UK);
+        List<ShowOption> options = Arrays.asList(THE_BUREAU_US, THE_BUREAU_UK);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("The Office", options, "73244");
+            ShowSelectionEvaluator.evaluate("The Bureau", options, "90102");
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(THE_OFFICE_US, decision.getChosen());
+        assertEquals(THE_BUREAU_US, decision.getChosen());
         assertTrue(decision.getMessage().toLowerCase().contains("pinned"));
     }
 
     @Test
     @DisplayName("Pinned ID not matching any candidate should fall through to other resolution")
     void testPinnedIdNoMatch() {
-        List<ShowOption> options = Arrays.asList(GAME_OF_THRONES);
+        List<ShowOption> options = Arrays.asList(REALM_OF_SHADOWS);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Game of Thrones", options, "999999");
+            ShowSelectionEvaluator.evaluate("Realm of Shadows", options, "999999");
 
         // Should still resolve via exact name match (single candidate)
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
     }
 
     @Test
     @DisplayName("Blank pinned ID should be ignored")
     void testBlankPinnedId() {
-        List<ShowOption> options = Arrays.asList(GAME_OF_THRONES);
+        List<ShowOption> options = Arrays.asList(REALM_OF_SHADOWS);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Game of Thrones", options, "   ");
+            ShowSelectionEvaluator.evaluate("Realm of Shadows", options, "   ");
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
     }
 
     // ========== Exact Name Match Tests ==========
@@ -128,38 +128,38 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Exact case-insensitive name match should return RESOLVED")
     void testExactNameMatchCaseInsensitive() {
-        List<ShowOption> options = Arrays.asList(GAME_OF_THRONES, THE_OFFICE_US);
+        List<ShowOption> options = Arrays.asList(REALM_OF_SHADOWS, THE_BUREAU_US);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("game of thrones", options, null);
+            ShowSelectionEvaluator.evaluate("realm of shadows", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
         assertTrue(decision.isResolved());
     }
 
     @Test
     @DisplayName("Exact name match should win even with multiple candidates")
     void testExactNameMatchMultipleCandidates() {
-        List<ShowOption> options = Arrays.asList(THE_OFFICE, THE_OFFICE_US, THE_OFFICE_UK);
+        List<ShowOption> options = Arrays.asList(THE_BUREAU, THE_BUREAU_US, THE_BUREAU_UK);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("The Office", options, null);
+            ShowSelectionEvaluator.evaluate("The Bureau", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(THE_OFFICE, decision.getChosen());
+        assertEquals(THE_BUREAU, decision.getChosen());
     }
 
     @Test
     @DisplayName("Exact name match with leading/trailing spaces")
     void testExactNameMatchWithSpaces() {
-        List<ShowOption> options = Arrays.asList(GAME_OF_THRONES);
+        List<ShowOption> options = Arrays.asList(REALM_OF_SHADOWS);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("  Game of Thrones  ", options, null);
+            ShowSelectionEvaluator.evaluate("  Realm of Shadows  ", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
     }
 
     // ========== Punctuation-Normalized Match Tests ==========
@@ -167,14 +167,14 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Punctuation-normalized name match should return RESOLVED")
     void testNormalizedNameMatch() {
-        List<ShowOption> options = Arrays.asList(SHIELD_WITH_ALIAS);
+        List<ShowOption> options = Arrays.asList(DEFEND_WITH_ALIAS);
 
         // Dots in name should be normalized to match
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Marvels Agents of SHIELD", options, null);
+            ShowSelectionEvaluator.evaluate("Vanguards Agents of DEFEND", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(SHIELD_WITH_ALIAS, decision.getChosen());
+        assertEquals(DEFEND_WITH_ALIAS, decision.getChosen());
     }
 
     // ========== Alias Match Tests ==========
@@ -182,38 +182,38 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Alias matching should return RESOLVED")
     void testAliasMatch() {
-        List<ShowOption> options = Arrays.asList(SHIELD_WITH_ALIAS);
+        List<ShowOption> options = Arrays.asList(DEFEND_WITH_ALIAS);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Agents of SHIELD", options, null);
+            ShowSelectionEvaluator.evaluate("Agents of DEFEND", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(SHIELD_WITH_ALIAS, decision.getChosen());
+        assertEquals(DEFEND_WITH_ALIAS, decision.getChosen());
         assertTrue(decision.getMessage().toLowerCase().contains("alias"));
     }
 
     @Test
     @DisplayName("Second alias in list should also match")
     void testSecondAliasMatch() {
-        List<ShowOption> options = Arrays.asList(SHIELD_WITH_ALIAS);
+        List<ShowOption> options = Arrays.asList(DEFEND_WITH_ALIAS);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("SHIELD", options, null);
+            ShowSelectionEvaluator.evaluate("DEFEND", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(SHIELD_WITH_ALIAS, decision.getChosen());
+        assertEquals(DEFEND_WITH_ALIAS, decision.getChosen());
     }
 
     @Test
     @DisplayName("Alias match should be case-insensitive")
     void testAliasMatchCaseInsensitive() {
-        List<ShowOption> options = Arrays.asList(SHIELD_WITH_ALIAS);
+        List<ShowOption> options = Arrays.asList(DEFEND_WITH_ALIAS);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("agents of shield", options, null);
+            ShowSelectionEvaluator.evaluate("agents of defend", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(SHIELD_WITH_ALIAS, decision.getChosen());
+        assertEquals(DEFEND_WITH_ALIAS, decision.getChosen());
     }
 
     // ========== Parenthetical Variant Tie-Breaker Tests ==========
@@ -221,23 +221,23 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Prefer base title over parenthetical variants")
     void testParentheticalVariantTieBreaker() {
-        List<ShowOption> options = Arrays.asList(NIGHT_MANAGER, NIGHT_MANAGER_IN, NIGHT_MANAGER_CN);
+        List<ShowOption> options = Arrays.asList(NIGHT_SHIFT, NIGHT_SHIFT_IN, NIGHT_SHIFT_CN);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("The Night Manager", options, null);
+            ShowSelectionEvaluator.evaluate("The Night Shift", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(NIGHT_MANAGER, decision.getChosen());
+        assertEquals(NIGHT_SHIFT, decision.getChosen());
     }
 
     @Test
     @DisplayName("Parenthetical variant tie-breaker requires base title in candidates")
     void testParentheticalVariantNoBase() {
         // Only variants, no base title
-        List<ShowOption> options = Arrays.asList(NIGHT_MANAGER_IN, NIGHT_MANAGER_CN);
+        List<ShowOption> options = Arrays.asList(NIGHT_SHIFT_IN, NIGHT_SHIFT_CN);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("The Night Manager", options, null);
+            ShowSelectionEvaluator.evaluate("The Night Shift", options, null);
 
         // Should be AMBIGUOUS since no base title and no exact match
         assertEquals(AMBIGUOUS, decision.getType());
@@ -248,13 +248,13 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Token set matching should prefer exact token match")
     void testTokenSetTieBreaker() {
-        List<ShowOption> options = Arrays.asList(DOCTOR_WHO, DOCTOR_WHO_2005);
+        List<ShowOption> options = Arrays.asList(TIME_LORD, TIME_LORD_2005);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Doctor Who", options, null);
+            ShowSelectionEvaluator.evaluate("Time Lord", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(DOCTOR_WHO, decision.getChosen());
+        assertEquals(TIME_LORD, decision.getChosen());
     }
 
     // ========== Year Tolerance Tie-Breaker Tests ==========
@@ -303,27 +303,27 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Single candidate should always resolve")
     void testSingleCandidate() {
-        List<ShowOption> options = Arrays.asList(GAME_OF_THRONES);
+        List<ShowOption> options = Arrays.asList(REALM_OF_SHADOWS);
 
         // Even with non-matching name, single candidate resolves
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("GoT", options, null);
+            ShowSelectionEvaluator.evaluate("RoS", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
         assertTrue(decision.getMessage().toLowerCase().contains("uniquely"));
     }
 
     @Test
     @DisplayName("Single candidate with completely different name should still resolve")
     void testSingleCandidateDifferentName() {
-        List<ShowOption> options = Arrays.asList(GAME_OF_THRONES);
+        List<ShowOption> options = Arrays.asList(REALM_OF_SHADOWS);
 
         ShowSelectionEvaluator.Decision decision =
             ShowSelectionEvaluator.evaluate("Completely Different Show", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
     }
 
     // ========== Ambiguous Tests ==========
@@ -347,11 +347,11 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Multiple Office variants without exact match should be AMBIGUOUS")
     void testAmbiguousOfficeVariants() {
-        List<ShowOption> options = Arrays.asList(THE_OFFICE_US, THE_OFFICE_UK);
+        List<ShowOption> options = Arrays.asList(THE_BUREAU_US, THE_BUREAU_UK);
 
-        // Neither "(US)" nor "(UK)" is in the extracted name, and no base "The Office" in candidates
+        // Neither "(US)" nor "(UK)" is in the extracted name, and no base "The Bureau" in candidates
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("The Office", options, null);
+            ShowSelectionEvaluator.evaluate("The Bureau", options, null);
 
         // Both are parenthetical variants but no base title, so ambiguous
         assertEquals(AMBIGUOUS, decision.getType());
@@ -362,51 +362,51 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Null extracted name with single candidate should resolve")
     void testNullExtractedName() {
-        List<ShowOption> options = Arrays.asList(GAME_OF_THRONES);
+        List<ShowOption> options = Arrays.asList(REALM_OF_SHADOWS);
 
         ShowSelectionEvaluator.Decision decision =
             ShowSelectionEvaluator.evaluate(null, options, null);
 
         // Single candidate should resolve
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
     }
 
     @Test
     @DisplayName("Blank extracted name with single candidate should resolve")
     void testBlankExtractedName() {
-        List<ShowOption> options = Arrays.asList(GAME_OF_THRONES);
+        List<ShowOption> options = Arrays.asList(REALM_OF_SHADOWS);
 
         ShowSelectionEvaluator.Decision decision =
             ShowSelectionEvaluator.evaluate("   ", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
     }
 
     @Test
     @DisplayName("Options list containing null should be handled gracefully")
     void testOptionsWithNulls() {
-        List<ShowOption> options = Arrays.asList(null, GAME_OF_THRONES, null);
+        List<ShowOption> options = Arrays.asList(null, REALM_OF_SHADOWS, null);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Game of Thrones", options, null);
+            ShowSelectionEvaluator.evaluate("Realm of Shadows", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
     }
 
     @Test
     @DisplayName("ShowOption with null name should be handled gracefully")
     void testShowOptionWithNullName() {
         ShowOption nullNameOption = new ShowOption("123", null);
-        List<ShowOption> options = Arrays.asList(nullNameOption, GAME_OF_THRONES);
+        List<ShowOption> options = Arrays.asList(nullNameOption, REALM_OF_SHADOWS);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Game of Thrones", options, null);
+            ShowSelectionEvaluator.evaluate("Realm of Shadows", options, null);
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(GAME_OF_THRONES, decision.getChosen());
+        assertEquals(REALM_OF_SHADOWS, decision.getChosen());
     }
 
     // ========== Decision Helper Method Tests ==========
@@ -415,8 +415,8 @@ public class ShowSelectionEvaluatorTest {
     @DisplayName("Decision helper methods work correctly for RESOLVED")
     void testDecisionHelperMethodsResolved() {
         ShowSelectionEvaluator.Decision resolved =
-            ShowSelectionEvaluator.evaluate("Game of Thrones",
-                Arrays.asList(GAME_OF_THRONES), null);
+            ShowSelectionEvaluator.evaluate("Realm of Shadows",
+                Arrays.asList(REALM_OF_SHADOWS), null);
 
         assertTrue(resolved.isResolved());
         assertFalse(resolved.isAmbiguous());
@@ -459,14 +459,14 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Pinned ID should take priority over exact name match")
     void testPinnedIdPriorityOverName() {
-        // Both options match "The Office" pattern, but pinned ID should win
-        List<ShowOption> options = Arrays.asList(THE_OFFICE, THE_OFFICE_UK);
+        // Both options match "The Bureau" pattern, but pinned ID should win
+        List<ShowOption> options = Arrays.asList(THE_BUREAU, THE_BUREAU_UK);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("The Office", options, "78107");
+            ShowSelectionEvaluator.evaluate("The Bureau", options, "90103");
 
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(THE_OFFICE_UK, decision.getChosen());
+        assertEquals(THE_BUREAU_UK, decision.getChosen());
         assertTrue(decision.getMessage().toLowerCase().contains("pinned"));
     }
 
@@ -474,13 +474,13 @@ public class ShowSelectionEvaluatorTest {
     @DisplayName("Exact name match should take priority over alias match")
     void testNameMatchPriorityOverAlias() {
         // Create a show where the name matches another show's alias
-        ShowOption mainShow = new ShowOption("1", "SHIELD");
-        List<ShowOption> options = Arrays.asList(mainShow, SHIELD_WITH_ALIAS);
+        ShowOption mainShow = new ShowOption("1", "DEFEND");
+        List<ShowOption> options = Arrays.asList(mainShow, DEFEND_WITH_ALIAS);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("SHIELD", options, null);
+            ShowSelectionEvaluator.evaluate("DEFEND", options, null);
 
-        // mainShow has exact name "SHIELD", should win over SHIELD_WITH_ALIAS's alias
+        // mainShow has exact name "DEFEND", should win over DEFEND_WITH_ALIAS's alias
         assertEquals(RESOLVED, decision.getType());
         assertEquals(mainShow, decision.getChosen());
     }
@@ -490,13 +490,13 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Fuzzy matching should resolve typo when score is high enough")
     void testFuzzyMatchTypo() {
-        ShowOption correctShow = new ShowOption("1", "Game of Thrones");
-        ShowOption differentShow = new ShowOption("2", "House of the Dragon");
+        ShowOption correctShow = new ShowOption("1", "Realm of Shadows");
+        ShowOption differentShow = new ShowOption("2", "Hall of the Serpent");
         List<ShowOption> options = Arrays.asList(correctShow, differentShow);
 
-        // "Gane of Thrones" has a typo - should fuzzy match to "Game of Thrones"
+        // "Ream of Shadows" has a typo - should fuzzy match to "Realm of Shadows"
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Gane of Thrones", options, null);
+            ShowSelectionEvaluator.evaluate("Ream of Shadows", options, null);
 
         assertEquals(RESOLVED, decision.getType());
         assertEquals(correctShow, decision.getChosen());
@@ -524,12 +524,12 @@ public class ShowSelectionEvaluatorTest {
     @DisplayName("Scored options should be sorted best-first in ambiguous decisions")
     void testScoredOptionsSorted() {
         ShowOption lowMatch = new ShowOption("1", "Completely Different Name");
-        ShowOption highMatch = new ShowOption("2", "Breaking Bad");
-        ShowOption mediumMatch = new ShowOption("3", "Breaking Badly");
+        ShowOption highMatch = new ShowOption("2", "Cracking Good");
+        ShowOption mediumMatch = new ShowOption("3", "Cracking Goodly");
         List<ShowOption> options = Arrays.asList(lowMatch, highMatch, mediumMatch);
 
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Breaking Bad", options, null);
+            ShowSelectionEvaluator.evaluate("Cracking Good", options, null);
 
         // Should resolve to exact match
         assertEquals(RESOLVED, decision.getType());
@@ -559,16 +559,16 @@ public class ShowSelectionEvaluatorTest {
     @Test
     @DisplayName("Fuzzy matching should check aliases for best score")
     void testFuzzyMatchWithAlias() {
-        // SHIELD_WITH_ALIAS has alias "Agents of SHIELD"
+        // DEFEND_WITH_ALIAS has alias "Agents of DEFEND"
         ShowOption otherShow = new ShowOption("999", "Completely Different");
-        List<ShowOption> options = Arrays.asList(otherShow, SHIELD_WITH_ALIAS);
+        List<ShowOption> options = Arrays.asList(otherShow, DEFEND_WITH_ALIAS);
 
-        // "Agents of SHIELD" matches an alias exactly
+        // "Agents of DEFEND" matches an alias exactly
         ShowSelectionEvaluator.Decision decision =
-            ShowSelectionEvaluator.evaluate("Agents of SHIELD", options, null);
+            ShowSelectionEvaluator.evaluate("Agents of DEFEND", options, null);
 
         // Should resolve via alias match (before fuzzy)
         assertEquals(RESOLVED, decision.getType());
-        assertEquals(SHIELD_WITH_ALIAS, decision.getChosen());
+        assertEquals(DEFEND_WITH_ALIAS, decision.getChosen());
     }
 }

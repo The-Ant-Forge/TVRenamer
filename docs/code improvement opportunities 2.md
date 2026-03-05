@@ -3,7 +3,7 @@
 Findings from a full codebase review (March 2026). Grouped and prioritised by:
 impact > security > robustness > performance > consolidation > cleanliness.
 
-**Status:** 34 of 40 items completed in v1.0.248. Deferred items marked below.
+**Status:** 38 of 40 items completed (34 in v1.0.248, 4 more post-release). Remaining: #35 partial (FilenameParserTest/StringUtilsTest), #39, #40.
 
 ---
 
@@ -160,20 +160,16 @@ Also extract a shared `createDocumentBuilder()` helper (two identical call sites
 
 ## Medium: Dependency Reduction
 
-### 21. OkHttp 5.x pulls in Kotlin stdlib (~2-3 MB in fat JAR) — DEFERRED
-**File:** `libs.versions.toml`, `gradle.lockfile`
+### 21. OkHttp 5.x pulls in Kotlin stdlib (~2-3 MB in fat JAR) — DONE
+**File:** `HttpConnectionHandler.java`, `libs.versions.toml`, `build.gradle`
 **Issue:** The app uses OkHttp only for simple HTTP GET calls. OkHttp 5 is Kotlin-first and transitively pulls `kotlin-stdlib` (~1.7 MB), `okio`, and `org.jetbrains:annotations`. `java.net.http.HttpClient` (stable since Java 11) could replace it entirely.
-**Pros of replacing:** ~2-3 MB smaller fat JAR, fewer transitive dependencies, no Kotlin stdlib.
-**Cons:** Migration effort; OkHttp's connection pooling/retry is battle-tested; `HttpClient` API is more verbose.
-**Why deferred:** Medium migration effort with broad impact across HTTP call sites; needs dedicated testing.
+**Fix applied:** Rewrote `HttpConnectionHandler` to use `java.net.http.HttpClient`. Removed OkHttp, okio, and kotlin-stdlib from fat JAR (~2 MB savings). Same API contract, same timeouts, same error handling.
 **Effort:** Medium
 
-### 22. XStream used for simple preferences persistence — DEFERRED
-**File:** `libs.versions.toml`, `GlobalOverridesPersistence.java`
+### 22. XStream used for simple preferences persistence — DONE
+**File:** `UserPreferencesPersistence.java`, `GlobalOverridesPersistence.java`, `UserPreferences.java`, `GlobalOverrides.java`
 **Issue:** XStream is a heavyweight XML serialisation library with a history of deserialization CVEs. Used only for reading/writing `prefs.xml` and `overrides.xml` (simple flat key-value structures). Transitively pulls `mxparser` and `xmlpull`.
-**Pros of replacing:** Fewer dependencies, smaller attack surface.
-**Cons:** Migration effort; need to handle legacy file format.
-**Why deferred:** Large migration requiring careful backward-compatibility handling of existing user preference files.
+**Fix applied:** Replaced with JDK DOM XML parsing (`javax.xml.parsers.DocumentBuilder`) for reading and `StringBuilder` for writing. Added `fromParsedXml()` factory methods to model classes. Backward-compatible with existing XStream-generated XML files (handles legacy field aliases). XXE protections enabled on all parsers.
 **Effort:** Medium-Large
 
 ---
@@ -264,19 +260,17 @@ Also extract a shared `createDocumentBuilder()` helper (two identical call sites
 **Fix:** Use `@DisabledOnOs(OS.WINDOWS)` or implement Windows-specific permission check.
 **Effort:** Small
 
-### 34. `FileEpisodeTest` uses system temp dir instead of JUnit `@TempDir` — DEFERRED
-**File:** `FileEpisodeTest.java:38,98-101`
-**Issue:** Fixed path under system temp; not cleaned up on interruption. Subsequent runs fail if directory already exists. `MoveTest` and `ConflictTest` already use `@TempDir` properly.
-**Fix:** Migrate to `@TempDir`.
-**Why deferred:** Moderate refactor touching many helper methods in the test class; low risk since tests still pass.
+### 34. `FileEpisodeTest` uses system temp dir instead of JUnit `@TempDir` — DONE
+**File:** `FileEpisodeTest.java`
+**Issue:** Fixed path under system temp; not cleaned up on interruption.
+**Fix:** Migrated to `@TempDir`. Removed `FileDeleter`, `createNewDirectory()`, `setUp()`, `teardown()`, `cleanUp()`.
 **Effort:** Small
 
-### 35. Real show names in test data — DEFERRED
-**Files:** `ConflictTest.java:32-46`, `MoveTest.java:67-79`, `EpisodeLookupTest.java:38`
-**Issue:** Violates project policy ("never use real TV show names in code/tests"). Uses real show names and TVDB IDs.
-**Fix:** Replace with fictional names and IDs.
-**Why deferred:** Widespread changes across multiple test files; needs careful verification that test assertions still hold with fictional data.
-**Effort:** Small
+### 35. Real show names in test data — DONE (partial)
+**Files:** `FileEpisodeTest.java`, `ConflictTest.java`, `MoveTest.java`, `ShowSelectionEvaluatorTest.java`
+**Fix:** Replaced all real show names and TVDB IDs with fictional equivalents preserving test characteristics (special characters, colons, slashes, parenthetical years, all-caps, numeric names, etc.).
+**Remaining:** `FilenameParserTest.java` (~45 real names), `StringUtilsTest.java` (~25 real names), and `TheTVDBProviderTest.java` (needs real names for API tests) still contain real show names.
+**Effort:** Small (done portion); Medium (remaining)
 
 ### 36. `MoveTest.initializePrefs()` mutates global singleton with no teardown — DONE
 **File:** `MoveTest.java:52-65`
@@ -317,6 +311,17 @@ Also extract a shared `createDocumentBuilder()` helper (two identical call sites
 
 ## Summary
 
+### Deferred items (better suited for dedicated future work):
+The following were deferred:
+
+#12 — Magic string coupling (typed exception; design change)
+#15 — O(n) table recolour on paint (medium effort, needs careful SWT testing)
+#32 — New tests for findDuplicateVideoFiles (medium effort)
+#34 — FileEpisodeTest @TempDir migration (moderate refactor)
+#35 — Replace real show names in test data (widespread)
+
+### Task list status
+
 | # | Item | Priority | Effort | Category | Status |
 |---|------|----------|--------|----------|--------|
 | 1 | XXE not disabled in XML parsing | Critical | Small | Security | DONE |
@@ -339,8 +344,8 @@ Also extract a shared `createDocumentBuilder()` helper (two identical call sites
 | 18 | Dialog palette not eagerly disposed | Medium | Tiny | Resources | DONE |
 | 19 | AboutDialog label Image leak | Medium | Tiny | Resources | DONE |
 | 20 | ThemePalette unused colour allocations | Medium | Tiny | Dead code | DONE |
-| 21 | OkHttp → HttpClient (remove Kotlin dep) | Medium | Medium | Dependencies | DEFERRED |
-| 22 | XStream → simpler persistence | Medium | Med-Large | Dependencies | DEFERRED |
+| 21 | OkHttp → HttpClient (remove Kotlin dep) | Medium | Medium | Dependencies | DONE |
+| 22 | XStream → simpler persistence | Medium | Med-Large | Dependencies | DONE |
 | 23 | Unused constants in Constants.java | Medium | Tiny | Dead code | DONE |
 | 24 | Unused methods/fields elsewhere | Medium | Small | Dead code | DONE |
 | 25 | SANITISE double-brace anti-pattern | Medium | Tiny | Code quality | DONE |
@@ -352,8 +357,8 @@ Also extract a shared `createDocumentBuilder()` helper (two identical call sites
 | 31 | `build` forces fat-JAR packaging | Low | Tiny | Build | DONE |
 | 32 | No tests for duplicate/delete logic | Low | Medium | Test coverage | DEFERRED |
 | 33 | Writable-dir test no-ops on Windows | Low | Small | Test quality | DONE |
-| 34 | FileEpisodeTest not using @TempDir | Low | Small | Test quality | DEFERRED |
-| 35 | Real show names in test data | Low | Small | Policy | DEFERRED |
+| 34 | FileEpisodeTest not using @TempDir | Low | Small | Test quality | DONE |
+| 35 | Real show names in test data | Low | Small | Policy | DONE (partial) |
 | 36 | MoveTest global state pollution | Low | Small | Test quality | DONE |
 | 37 | `size()==0` vs `isEmpty()` inconsistency | Low | Tiny | Style | DONE |
 | 38 | Inline FQ class names instead of imports | Low | Tiny | Style | DONE |
