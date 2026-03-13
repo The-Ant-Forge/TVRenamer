@@ -49,11 +49,13 @@ class HttpConnectionHandler {
     ) throws TVRenamerIOException {
         String msg;
         if (cause == null) {
-            msg =
-                "attempt to download " +
-                url +
-                " failed with response code " +
-                statusCode;
+            String category = switch (statusCode / 100) {
+                case 4 -> " (client error)";
+                case 5 -> " (server error)";
+                default -> "";
+            };
+            msg = "HTTP " + statusCode + category
+                + " downloading " + url;
         } else {
             msg = "exception downloading " + url;
         }
@@ -86,6 +88,7 @@ class HttpConnectionHandler {
             int statusCode = response.statusCode();
             if (statusCode >= 200 && statusCode < 300) {
                 String downloaded = response.body();
+                logger.fine("Downloaded " + urlString + " (" + statusCode + ")");
                 if (logger.isLoggable(Level.FINEST)) {
                     logger.log(
                         Level.FINEST,

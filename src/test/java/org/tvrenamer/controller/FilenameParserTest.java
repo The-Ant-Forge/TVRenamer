@@ -85,8 +85,8 @@ public class FilenameParserTest {
         // Make sure this is parsed as episode 14, not episode 142
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("Futurama.S07E14.2-D Blacktop.HDTV.x264")
-                .filenameShow("Futurama")
+                .inputFilename("Galaxion.S07E14.2-D Blacktop.HDTV.x264")
+                .filenameShow("Galaxion")
                 .seasonNumString("07")
                 .episodeNumString("14")
                 .build()
@@ -283,9 +283,9 @@ public class FilenameParserTest {
         values.add(
             new EpisodeTestData.Builder()
                 .inputFilename(
-                    "Lost.S06E05.Lighthouse.DD51.720p.WEB-DL.AVC-FUSiON.mkv"
+                    "Haze.S06E05.Lighthouse.DD51.720p.WEB-DL.AVC-FUSiON.mkv"
                 )
-                .filenameShow("Lost")
+                .filenameShow("Haze")
                 .seasonNumString("6")
                 .episodeNumString("5")
                 .episodeResolution("720p")
@@ -388,8 +388,8 @@ public class FilenameParserTest {
     public static void setupValues15() {
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("/TV/Dexter/S05E05 First Blood.mkv")
-                .filenameShow("Dexter")
+                .inputFilename("/TV/Vortex/S05E05 First Blood.mkv")
+                .filenameShow("Vortex")
                 .seasonNumString("5")
                 .episodeNumString("5")
                 .build()
@@ -400,8 +400,8 @@ public class FilenameParserTest {
     public static void setupValues16() {
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("/TV/Lost/Lost [2x07].mkv")
-                .filenameShow("Lost [")
+                .inputFilename("/TV/Haze/Haze [2x07].mkv")
+                .filenameShow("Haze [")
                 .seasonNumString("2")
                 .episodeNumString("7")
                 .build()
@@ -412,8 +412,8 @@ public class FilenameParserTest {
     public static void setupValues161() {
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("/TV/Lost/2x07.mkv")
-                .filenameShow("Lost")
+                .inputFilename("/TV/Haze/2x07.mkv")
+                .filenameShow("Haze")
                 .seasonNumString("2")
                 .episodeNumString("7")
                 .build()
@@ -460,8 +460,8 @@ public class FilenameParserTest {
     public static void setupValues20() {
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("Elementary.S02E23.HDTV.x264-LOL.mp4")
-                .filenameShow("Elementary")
+                .inputFilename("Glassworks.S02E23.HDTV.x264-LOL.mp4")
+                .filenameShow("Glassworks")
                 .seasonNumString("2")
                 .episodeNumString("23")
                 .build()
@@ -484,8 +484,8 @@ public class FilenameParserTest {
     public static void setupValues22() {
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("Fargo.S01E01.HDTV.x264-2HD.mp4")
-                .filenameShow("Fargo")
+                .inputFilename("Ember.S01E01.HDTV.x264-2HD.mp4")
+                .filenameShow("Ember")
                 .seasonNumString("1")
                 .episodeNumString("1")
                 .build()
@@ -508,8 +508,8 @@ public class FilenameParserTest {
     public static void setupValues24() {
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("Grimm.S03E19.HDTV.x264-LOL.mp4")
-                .filenameShow("Grimm")
+                .inputFilename("Dread.S03E19.HDTV.x264-LOL.mp4")
+                .filenameShow("Dread")
                 .seasonNumString("3")
                 .episodeNumString("19")
                 .build()
@@ -606,8 +606,8 @@ public class FilenameParserTest {
     public static void setupValues32() {
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("Supernatural.S09E21.HDTV.x264-LOL.mp4")
-                .filenameShow("Supernatural")
+                .inputFilename("Nightwatcher.S09E21.HDTV.x264-LOL.mp4")
+                .filenameShow("Nightwatcher")
                 .seasonNumString("9")
                 .episodeNumString("21")
                 .build()
@@ -982,9 +982,9 @@ public class FilenameParserTest {
         values.add(
             new EpisodeTestData.Builder()
                 .inputFilename(
-                    "Lucifer.S02E03.720p.HDTV.X264-DIMENSION[ettv].mkv"
+                    "Specter.S02E03.720p.HDTV.X264-DIMENSION[ettv].mkv"
                 )
-                .filenameShow("Lucifer")
+                .filenameShow("Specter")
                 .seasonNumString("2")
                 .episodeNumString("3")
                 .episodeResolution("720p")
@@ -1012,9 +1012,9 @@ public class FilenameParserTest {
         values.add(
             new EpisodeTestData.Builder()
                 .inputFilename(
-                    "Supernatural.S11E22.1080p.HDTV.X264-DIMENSION[ettv].mkv"
+                    "Nightwatcher.S11E22.1080p.HDTV.X264-DIMENSION[ettv].mkv"
                 )
-                .filenameShow("Supernatural")
+                .filenameShow("Nightwatcher")
                 .seasonNumString("11")
                 .episodeNumString("22")
                 .episodeResolution("1080p")
@@ -1027,9 +1027,9 @@ public class FilenameParserTest {
         values.add(
             new EpisodeTestData.Builder()
                 .inputFilename(
-                    "Supernatural.S11E22.HDTV.X264-DIMENSION.720p.[ettv].mkv"
+                    "Nightwatcher.S11E22.HDTV.X264-DIMENSION.720p.[ettv].mkv"
                 )
-                .filenameShow("Supernatural")
+                .filenameShow("Nightwatcher")
                 .seasonNumString("11")
                 .episodeNumString("22")
                 .episodeResolution("720p")
@@ -1056,8 +1056,8 @@ public class FilenameParserTest {
     public static void setupValues67() {
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("NCIS.S14E04.720p.HDTV.X264-DIMENSION[ettv].mkv")
-                .filenameShow("NCIS")
+                .inputFilename("VKTF.S14E04.720p.HDTV.X264-DIMENSION[ettv].mkv")
+                .filenameShow("VKTF")
                 .seasonNumString("14")
                 .episodeNumString("4")
                 .episodeResolution("720p")
@@ -1421,8 +1421,8 @@ public class FilenameParserTest {
     public static void setupValues95() {
         values.add(
             new EpisodeTestData.Builder()
-                .inputFilename("/TV/Dexter/407.Slack.Tide.hdtv.x264-sys.mkv")
-                .filenameShow("Dexter")
+                .inputFilename("/TV/Vortex/407.Slack.Tide.hdtv.x264-sys.mkv")
+                .filenameShow("Vortex")
                 .seasonNumString("4")
                 .episodeNumString("07")
                 .build()

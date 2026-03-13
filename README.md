@@ -5,7 +5,7 @@
 
 ## About
 TVRenamer is a Java GUI utility to rename TV episodes from TV listings.
-It will take an ugly filename like **Lost.[6x05].DD51.720p.WEB-DL.AVC-FUSiON.mkv** and rename it to **Lost S06E05 Lighthouse.mkv**
+It will take an ugly filename like **Solar.Drift.[3x08].DD51.720p.WEB-DL.AVC-FUSiON.mkv** and rename it to **Solar Drift S03E08 Into the Rings.mkv**
 
 ## Fork / provenance
 This repository was originally forked from the abandoned yet incredibly useful https://github.com/tvrenamer/tvrenamer
@@ -134,18 +134,15 @@ CI (GitHub Actions) runs a Windows build and uploads artifacts:
 Current versions are managed via Gradle version catalogs (`gradle/libs.versions.toml`).
 
 Runtime dependencies:
-- SWT (Windows x64) 3.129.0
-- XStream 1.4.21
-- Apache Commons Codec 1.21.0
-- OkHttp 5.3.2
-- mp4parser 1.9.56
+- SWT (Windows x64) 3.132.0
+- JDK built-in XML (javax.xml) and HTTP (java.net.http) APIs
 
 Test dependencies:
-- JUnit 5.11.4 (Jupiter)
+- JUnit 5.14.3 (Jupiter)
 
 Build tooling:
 - Gradle 9.3.1
-- Shadow plugin 9.3.1 (GradleUp)
+- Shadow plugin 9.3.2 (GradleUp)
 - Launch4j Gradle plugin 4.0.0
 - SpotBugs plugin 6.4.8
 

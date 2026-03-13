@@ -175,12 +175,12 @@ public class StringUtilsTest {
 
     @Test
     public void testGetExtension() {
-        assertEquals(".mkv", getExtension("dexter.407.720p.hdtv.x264-sys.mkv"));
+        assertEquals(".mkv", getExtension("vexlar.407.720p.hdtv.x264-sys.mkv"));
         String shield =
-            "Marvels.Agents.of.S.H.I.E.L.D.S04E03.1080p.HDTV.x264-KILLERS[ettv].avi";
+            "Phantoms.Agents.of.G.U.A.R.D.S.S04E03.1080p.HDTV.x264-KILLERS[ettv].avi";
         assertEquals(".avi", getExtension(shield));
-        assertEquals(".mp4", getExtension("/TV/Dexter/S05E05 First Blood.mp4"));
-        assertEquals("", getExtension("Supernatural"));
+        assertEquals(".mp4", getExtension("/TV/Vexlar/S05E05 First Blood.mp4"));
+        assertEquals("", getExtension("Preternatural"));
     }
 
     @Test
@@ -274,119 +274,119 @@ public class StringUtilsTest {
     @Test
     public void testReplacePunctuation() {
         assertEquals(
-            "Marvels Agents of SHIELD",
-            replacePunctuation("Marvel's.Agents.of.S.H.I.E.L.D.")
+            "Phantoms Agents of GUARDS",
+            replacePunctuation("Phantom's.Agents.of.G.U.A.R.D.S.")
         );
         assertEquals(
-            "Marvels Agents of SHIELD",
-            replacePunctuation("Marvel's Agents of S.H.I.E.L.D.")
+            "Phantoms Agents of GUARDS",
+            replacePunctuation("Phantom's Agents of G.U.A.R.D.S.")
         );
         assertEquals(
-            "Marvels Agents of SHIELD",
-            replacePunctuation("Marvel's Agents of SHIELD")
+            "Phantoms Agents of GUARDS",
+            replacePunctuation("Phantom's Agents of GUARDS")
         );
         assertEquals(
-            "Star Trek The Next Generation",
-            replacePunctuation("Star Trek: The Next Generation")
+            "Neon Drift The Lost Frontier",
+            replacePunctuation("Neon Drift: The Lost Frontier")
         );
         assertEquals(
-            "Monty Pythons Flying Circus",
-            replacePunctuation("Monty Python's Flying Circus")
+            "Danny Farlows Flying Circus",
+            replacePunctuation("Danny Farlow's Flying Circus")
         );
         assertEquals(
-            "Married with Children",
-            replacePunctuation("Married... with Children")
+            "Coupled with Abandon",
+            replacePunctuation("Coupled... with Abandon")
         );
         assertEquals(
-            "God The Devil and Bob",
-            replacePunctuation("God, The Devil and Bob")
+            "Hex The Demon and Gus",
+            replacePunctuation("Hex, The Demon and Gus")
         );
         assertEquals(
-            "Whats Happening",
-            replacePunctuation("What's Happening!!")
+            "Whats Cracking",
+            replacePunctuation("What's Cracking!!")
         );
         assertEquals(
-            "Brooklyn Nine Nine",
-            replacePunctuation("Brooklyn Nine-Nine")
+            "Precinct Four Four",
+            replacePunctuation("Precinct Four-Four")
         );
         assertEquals(
-            "Murder She Wrote",
-            replacePunctuation("Murder, She Wrote")
+            "Riddle She Found",
+            replacePunctuation("Riddle, She Found")
         );
         assertEquals(
-            "Murder She Wrote",
-            replacePunctuation("Murder-She-Wrote")
+            "Riddle She Found",
+            replacePunctuation("Riddle-She-Found")
         );
-        assertEquals("Andy Barker PI", replacePunctuation("Andy Barker, P.I."));
+        assertEquals("Grey Falcon PI", replacePunctuation("Grey Falcon, P.I."));
         assertEquals(
-            "Laverne & Shirley",
-            replacePunctuation("Laverne & Shirley")
-        );
-        assertEquals(
-            "Sit Down Shut Up",
-            replacePunctuation("Sit Down, Shut Up")
-        );
-        assertEquals("The Real ONeals", replacePunctuation("The Real O'Neals"));
-        assertEquals("The Office (US)", replacePunctuation("The Office (US)"));
-        assertEquals("That 70s Show", replacePunctuation("That '70s Show"));
-        assertEquals("Eerie Indiana", replacePunctuation("Eerie, Indiana"));
-        assertEquals("American Dad", replacePunctuation("American Dad!"));
-        assertEquals("Bobs Burgers", replacePunctuation("Bob's Burgers"));
-        assertEquals("Man vs Wild", replacePunctuation("Man vs. Wild"));
-        assertEquals("The X Files", replacePunctuation("The X-Files"));
-        assertEquals("Myth Busters", replacePunctuation("MythBusters"));
-        assertEquals("Blackish", replacePunctuation("Black-ish"));
-        assertEquals("30 Rock", replacePunctuation("30Rock"));
-        assertEquals("Mr Robot", replacePunctuation("Mr. Robot"));
-        assertEquals("Starving", replacePunctuation("Star-ving"));
-        assertEquals("big bang theory", replacePunctuation("big-bang-theory"));
-        assertEquals("american dad", replacePunctuation("american-dad"));
-        assertEquals(
-            "Cosmos A Space Time Odyssey",
-            replacePunctuation("Cosmos.A.Space.Time.Odyssey.")
+            "Wilkins & Thorne",
+            replacePunctuation("Wilkins & Thorne")
         );
         assertEquals(
-            "How I Met Your Mother",
-            replacePunctuation("How.I.Met.Your.Mother.")
+            "Sit Down Move On",
+            replacePunctuation("Sit Down, Move On")
+        );
+        assertEquals("The Real OBriens", replacePunctuation("The Real O'Briens"));
+        assertEquals("The Bureau (US)", replacePunctuation("The Bureau (US)"));
+        assertEquals("That 90s Crowd", replacePunctuation("That '90s Crowd"));
+        assertEquals("Eerie Arcadia", replacePunctuation("Eerie, Arcadia"));
+        assertEquals("Midnight Dad", replacePunctuation("Midnight Dad!"));
+        assertEquals("Teds Burdens", replacePunctuation("Ted's Burdens"));
+        assertEquals("Elm vs Wild", replacePunctuation("Elm vs. Wild"));
+        assertEquals("The Q Files", replacePunctuation("The Q-Files"));
+        assertEquals("Lore Busters", replacePunctuation("LoreBusters"));
+        assertEquals("Greyish", replacePunctuation("Grey-ish"));
+        assertEquals("40 Flock", replacePunctuation("40Flock"));
+        assertEquals("Dr Cobalt", replacePunctuation("Dr. Cobalt"));
+        assertEquals("Starling", replacePunctuation("Star-ling"));
+        assertEquals("cold signal theory", replacePunctuation("cold-signal-theory"));
+        assertEquals("midnight dad", replacePunctuation("midnight-dad"));
+        assertEquals(
+            "Vortex A Warped Time Trilogy",
+            replacePunctuation("Vortex.A.Warped.Time.Trilogy.")
+        );
+        assertEquals(
+            "How We Lost Our Rhythm",
+            replacePunctuation("How.We.Lost.Our.Rhythm.")
         );
     }
 
     @Test
     public void testReplacePunctuation2() {
         // The apostrophe (single quote) is treated specially: simply removed
-        assertEquals("New Girl", replacePunctuation("Ne'w Girl"));
+        assertEquals("Elm Bark", replacePunctuation("El'm Bark"));
         // Parentheses and ampersand are left alone
-        assertEquals("New (Girl)", replacePunctuation("New (Girl)"));
-        assertEquals("New & Girl", replacePunctuation("New & Girl"));
+        assertEquals("Elm (Bark)", replacePunctuation("Elm (Bark)"));
+        assertEquals("Elm & Bark", replacePunctuation("Elm & Bark"));
         // Other punctuation gets replaced by a space
-        assertEquals("New Girl", replacePunctuation("New\\Girl"));
-        assertEquals("New Girl", replacePunctuation("New\"Girl"));
-        assertEquals("New Girl", replacePunctuation("New!Girl"));
-        assertEquals("New Girl", replacePunctuation("New#Girl"));
-        assertEquals("New Girl", replacePunctuation("New$Girl"));
-        assertEquals("New Girl", replacePunctuation("New%Girl"));
-        assertEquals("New Girl", replacePunctuation("New*Girl"));
-        assertEquals("New Girl", replacePunctuation("New+Girl"));
-        assertEquals("New Girl", replacePunctuation("New,Girl"));
-        assertEquals("New Girl", replacePunctuation("New-Girl"));
-        assertEquals("New Girl", replacePunctuation("New.Girl"));
-        assertEquals("New Girl", replacePunctuation("New/Girl"));
-        assertEquals("New Girl", replacePunctuation("New:Girl"));
-        assertEquals("New Girl", replacePunctuation("New;Girl"));
-        assertEquals("New Girl", replacePunctuation("New<Girl"));
-        assertEquals("New Girl", replacePunctuation("New=Girl"));
-        assertEquals("New Girl", replacePunctuation("New>Girl"));
-        assertEquals("New Girl", replacePunctuation("New?Girl"));
-        assertEquals("New Girl", replacePunctuation("New@Girl"));
-        assertEquals("New Girl", replacePunctuation("New[Girl"));
-        assertEquals("New Girl", replacePunctuation("New]Girl"));
-        assertEquals("New Girl", replacePunctuation("New^Girl"));
-        assertEquals("New Girl", replacePunctuation("New_Girl"));
-        assertEquals("New Girl", replacePunctuation("New`Girl"));
-        assertEquals("New Girl", replacePunctuation("New{Girl"));
-        assertEquals("New Girl", replacePunctuation("New|Girl"));
-        assertEquals("New Girl", replacePunctuation("New}Girl"));
-        assertEquals("New Girl", replacePunctuation("New~Girl"));
+        assertEquals("Elm Bark", replacePunctuation("Elm\\Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm\"Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm!Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm#Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm$Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm%Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm*Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm+Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm,Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm-Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm.Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm/Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm:Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm;Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm<Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm=Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm>Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm?Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm@Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm[Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm]Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm^Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm_Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm`Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm{Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm|Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm}Bark"));
+        assertEquals("Elm Bark", replacePunctuation("Elm~Bark"));
     }
 
     /**
@@ -435,37 +435,37 @@ public class StringUtilsTest {
      */
     @Test
     public void testTrimForQueryString() {
-        assertTrimSafe("Marvel's.Agents.of.S.H.I.E.L.D.");
-        assertTrimSafe("Marvel's Agents of S.H.I.E.L.D.");
-        assertTrimSafe("Marvel's Agents of SHIELD");
-        assertTrimSafe("Star Trek: The Next Generation");
-        assertTrimSafe("Monty Python's Flying Circus");
-        assertTrimSafe("Married... with Children");
-        assertTrimSafe("God, The Devil and Bob");
-        assertTrimSafe("What's Happening!!");
-        assertTrimSafe("Brooklyn Nine-Nine");
-        assertTrimSafe("Murder, She Wrote");
-        assertTrimSafe("Murder-She-Wrote");
-        assertTrimSafe("Andy Barker, P.I.");
-        assertTrimSafe("Laverne & Shirley");
-        assertTrimSafe("Sit Down, Shut Up");
-        assertTrimSafe("The Real O'Neals");
-        assertTrimSafe("The Office (US)");
-        assertTrimSafe("That '70s Show");
-        assertTrimSafe("Eerie, Indiana");
-        assertTrimSafe("American Dad!");
-        assertTrimSafe("Bob's Burgers");
-        assertTrimSafe("Man vs. Wild");
-        assertTrimSafe("The X-Files");
-        assertTrimSafe("MythBusters");
-        assertTrimSafe("Black-ish");
-        assertTrimSafe("30Rock");
-        assertTrimSafe("Mr. Robot");
-        assertTrimSafe("Star-ving");
-        assertTrimSafe("big-bang-theory");
-        assertTrimSafe("american-dad");
-        assertTrimSafe("Cosmos.A.Space.Time.Odyssey.");
-        assertTrimSafe("How.I.Met.Your.Mother.");
+        assertTrimSafe("Phantom's.Agents.of.G.U.A.R.D.S.");
+        assertTrimSafe("Phantom's Agents of G.U.A.R.D.S.");
+        assertTrimSafe("Phantom's Agents of GUARDS");
+        assertTrimSafe("Neon Drift: The Lost Frontier");
+        assertTrimSafe("Danny Farlow's Flying Circus");
+        assertTrimSafe("Coupled... with Abandon");
+        assertTrimSafe("Hex, The Demon and Gus");
+        assertTrimSafe("What's Cracking!!");
+        assertTrimSafe("Precinct Four-Four");
+        assertTrimSafe("Riddle, She Found");
+        assertTrimSafe("Riddle-She-Found");
+        assertTrimSafe("Grey Falcon, P.I.");
+        assertTrimSafe("Wilkins & Thorne");
+        assertTrimSafe("Sit Down, Move On");
+        assertTrimSafe("The Real O'Briens");
+        assertTrimSafe("The Bureau (US)");
+        assertTrimSafe("That '90s Crowd");
+        assertTrimSafe("Eerie, Arcadia");
+        assertTrimSafe("Midnight Dad!");
+        assertTrimSafe("Ted's Burdens");
+        assertTrimSafe("Elm vs. Wild");
+        assertTrimSafe("The Q-Files");
+        assertTrimSafe("LoreBusters");
+        assertTrimSafe("Grey-ish");
+        assertTrimSafe("40Flock");
+        assertTrimSafe("Dr. Cobalt");
+        assertTrimSafe("Star-ling");
+        assertTrimSafe("cold-signal-theory");
+        assertTrimSafe("midnight-dad");
+        assertTrimSafe("Vortex.A.Warped.Time.Trilogy.");
+        assertTrimSafe("How.We.Lost.Our.Rhythm.");
         assertTrimSafe("Dr. Foo's Man-Pig");
         assertTrimSafe("Dr. Foo's Man-Pig ");
         assertTrimSafe("Dr. Foo's_Man-Pig_");
@@ -488,8 +488,8 @@ public class StringUtilsTest {
 
     @Test
     public void testGetBaseName() {
-        assertEquals("dexter.407.720p.hdtv.x264-sys", getBaseName("dexter.407.720p.hdtv.x264-sys.mkv"));
-        assertEquals("Supernatural", getBaseName("Supernatural"));
+        assertEquals("vexlar.407.720p.hdtv.x264-sys", getBaseName("vexlar.407.720p.hdtv.x264-sys.mkv"));
+        assertEquals("Preternatural", getBaseName("Preternatural"));
         assertEquals("test", getBaseName("test.mp4"));
         assertEquals(".hidden", getBaseName(".hidden"));
     }

@@ -11,7 +11,8 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
+import org.tvrenamer.controller.util.StringUtils;
+import org.tvrenamer.controller.util.XmlUtilities;
 import org.tvrenamer.model.UserPreferences;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -102,7 +103,7 @@ public class UserPreferencesPersistence {
             }
 
             // Overwrite any existing file
-            Files.writeString(path, xml.toString());
+            Files.writeString(path, xml.toString(), java.nio.charset.StandardCharsets.UTF_8);
         } catch (
             IOException
             | UnsupportedOperationException
@@ -137,12 +138,7 @@ public class UserPreferencesPersistence {
         }
 
         try (InputStream in = Files.newInputStream(path)) {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            // Harden against XXE
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-            DocumentBuilder builder = factory.newDocumentBuilder();
+            DocumentBuilder builder = XmlUtilities.createDocumentBuilder();
             Document doc = builder.parse(in);
 
             Element root = doc.getDocumentElement();
@@ -160,8 +156,8 @@ public class UserPreferencesPersistence {
             List<String> keywords = parseStringList(root, "ignoreKeywords");
 
             // Parse map fields
-            Map<String, String> nameOverrides = parseStringMap(root, "showNameOverrides");
-            Map<String, String> disambigOverrides = parseStringMap(root, "showDisambiguationOverrides");
+            Map<String, String> nameOverrides = XmlUtilities.parseStringMap(root, "showNameOverrides");
+            Map<String, String> disambigOverrides = XmlUtilities.parseStringMap(root, "showDisambiguationOverrides");
 
             return UserPreferences.fromParsedXml(
                 scalars, keywords, nameOverrides, disambigOverrides
@@ -231,32 +227,6 @@ public class UserPreferencesPersistence {
         return result.isEmpty() ? null : result;
     }
 
-    /**
-     * Parse a map of strings from a container element.
-     * Expects: {@code <containerTag><entry><string>key</string><string>value</string></entry></containerTag>}
-     */
-    private static Map<String, String> parseStringMap(Element root, String containerTag) {
-        NodeList containers = root.getElementsByTagName(containerTag);
-        if (containers.getLength() == 0) {
-            return null;
-        }
-        Element container = (Element) containers.item(0);
-        NodeList entries = container.getElementsByTagName("entry");
-        Map<String, String> result = new LinkedHashMap<>();
-        for (int i = 0; i < entries.getLength(); i++) {
-            Element entry = (Element) entries.item(i);
-            NodeList strings = entry.getElementsByTagName("string");
-            if (strings.getLength() >= 2) {
-                String key = strings.item(0).getTextContent();
-                String value = strings.item(1).getTextContent();
-                if (key != null && value != null) {
-                    result.put(key.trim(), value.trim());
-                }
-            }
-        }
-        return result.isEmpty() ? null : result;
-    }
-
     private static void appendElement(StringBuilder sb, String name, String value) {
         appendElement(sb, name, value, 2);
     }
@@ -264,7 +234,7 @@ public class UserPreferencesPersistence {
     private static void appendElement(StringBuilder sb, String name, String value, int indent) {
         String spaces = " ".repeat(indent);
         sb.append(spaces).append('<').append(name).append('>');
-        sb.append(escapeXml(value));
+        sb.append(StringUtils.escapeXml(value));
         sb.append("</").append(name).append(">\n");
     }
 
@@ -290,14 +260,4 @@ public class UserPreferencesPersistence {
         sb.append("  </").append(name).append(">\n");
     }
 
-    private static String escapeXml(String s) {
-        if (s == null) {
-            return "";
-        }
-        return s.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&apos;");
-    }
 }

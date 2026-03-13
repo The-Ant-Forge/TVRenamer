@@ -45,6 +45,10 @@ public class Constants {
     public static final String VERSION_NUMBER = Environment.readVersionNumber();
     public static final String VERSION_LABEL = "Version: " + VERSION_NUMBER;
 
+    // ---- API keys ----
+    // The unique API key for the TheTVDB v1 API. Forks should register their own key.
+    public static final String TVDB_API_KEY = "4A9560FF0B2670B2";
+
     // ---- URLs ----
 
     // Fork URLs (GitHub)

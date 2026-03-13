@@ -123,6 +123,8 @@ public class UpdateChecker {
             }
             listener.notifyUpdateStatus(doNotify);
         });
+        updateCheckThread.setDaemon(true);
+        updateCheckThread.setName("tvrenamer-update-check");
         updateCheckThread.start();
     }
 

@@ -387,7 +387,7 @@ public class FileMover implements Callable<Boolean> {
         FileTime originalMtime = null;
         try {
             originalMtime = Files.getLastModifiedTime(srcPath);
-        } catch (Exception e) {
+        } catch (IOException e) {
             logger.log(Level.FINE, () -> "Could not read mtime from " + srcPath + ": " + e.getMessage());
         }
 
@@ -595,22 +595,11 @@ public class FileMover implements Callable<Boolean> {
             // setFailToMove on the episode in each individual case, make the functionality
             // into a subfunction, and set the episode here for any of the failure cases.
             tryToMoveFile();
-        } catch (RuntimeException e) {
-            // RuntimeException is unexpected here; log with full context.
-            setFailureAndLog(
-                getCurrentPath(),
-                destRoot,
-                "unexpected runtime exception during file move",
-                e
-            );
         } catch (Exception e) {
-            // Defensive: keep legacy behavior but improve diagnostics.
-            setFailureAndLog(
-                getCurrentPath(),
-                destRoot,
-                "exception caught doing file move",
-                e
-            );
+            String detail = (e instanceof RuntimeException)
+                ? "unexpected runtime exception during file move"
+                : "exception caught doing file move";
+            setFailureAndLog(getCurrentPath(), destRoot, detail, e);
         } finally {
             if (observer != null) {
                 observer.finishProgress(episode);

@@ -664,6 +664,22 @@ Completes the code improvement opportunities document (all 24 items done).
     `adding-files.html`) to reflect the new menu structure.
   - Removed references to a non-existent "File → Add Files" menu item from help.
 
+### 51) Code review round 3 — 23 improvements across concurrency, duplication, error handling, tests, and docs
+- **Why:** Third consolidation pass using expanded 18-category checklist. Focused on concurrency safety, XML utility deduplication, error handling precision, test coverage, and documentation accuracy.
+- **Where:** Review document: `docs/Code-Review-260313.md` (30 findings, 23 implemented, 7 closed as N/A).
+- **What we did:**
+  - **Concurrency (#1–#5):** Made UpdateChecker and PreferencesDialog validation threads daemon; added display/widget disposal checks in ResultsTable and PreferencesDialog asyncExec callbacks.
+  - **XML duplication (#6–#8):** Extracted `XmlUtilities` class with shared `createDocumentBuilder()` (XXE-hardened) and `parseStringMap()`; removed duplicate `escapeXml()` from both persistence classes.
+  - **Error handling (#9–#11):** Narrowed `catch(Exception)` to `catch(IOException)` in FileMover mtime read; merged redundant catch blocks; added HTTP status classification and success logging in HttpConnectionHandler.
+  - **File I/O (#12):** Added explicit `StandardCharsets.UTF_8` to `Files.writeString()` calls.
+  - **Config hygiene (#16, #18):** Extracted TVDB API key to `Constants.TVDB_API_KEY`; added try-catch for malformed preference values.
+  - **Logging (#19):** Added success logging for HTTP downloads with status code.
+  - **Documentation (#22–#25):** Updated README dependency list (removed XStream/OkHttp/mp4parser, corrected SWT version); updated TODO.md dependency table; fixed JUnit version in Completed.md; replaced real show name in README example.
+  - **Test names (#26):** Replaced 14 real show name references in FilenameParserTest with fictional equivalents.
+  - **New tests (#28–#30):** Created `MetadataTaggingControllerTest` (5 tests), `UpdateCheckerTest` (13 tests), `ShowTest` (19 tests), `SeriesTest` (12 tests), `ShowNameTest` (18 tests) — 67 new tests total.
+  - **CLAUDE.md:** Expanded code review checklist from 12 to 18 categories (added concurrency, resource lifecycle, file I/O, API contracts, config hygiene, logging).
+  - Renamed previous review docs to date-based convention (`Code-Review-260210.md`, `Code-Review-260304.md`).
+
 ---
 
 ## Related records

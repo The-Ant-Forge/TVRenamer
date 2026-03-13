@@ -146,8 +146,7 @@ Periodically we do a consolidation review covering all source, tests, build conf
 
 ### Review Checklist
 1. **Dead code** — unused functions, classes, modules, imports, config keys
-2. **Dead dependencies** — libraries that are unused or underused relative
-   to what we could replace inline
+2. **Dead dependencies** — libraries unused or underused; CVE/vulnerability exposure
 3. **Duplication** — repeated or near-identical logic that should be shared
 4. **Naming & consistency** — mixed conventions, unclear names, stale comments
 5. **Error handling** — inconsistent patterns, swallowed exceptions, missing
@@ -158,8 +157,20 @@ Periodically we do a consolidation review covering all source, tests, build conf
 9. **Documentation drift** — specs, docstrings, or README sections that no
    longer match the code
 10. **Performance** — unnecessary work, avoidable allocations, slow patterns
-11. **Robustness** — race conditions, resource leaks, missing cleanup
-12. **TODO/FIXME/HACK audit** — resolve or remove stale markers
+11. **Robustness** — resource leaks, missing cleanup, defensive coding gaps
+12. **Concurrency & UI thread safety** — SWT widget access from correct thread,
+    safe handoff from workers, cancellation/timeouts
+13. **Resource lifecycle & disposal** — SWT resources (Color, Font, Image),
+    streams, executors, shutdown hooks
+14. **File I/O correctness** — path normalization, encoding, atomicity,
+    partial-write recovery, platform path differences
+15. **API contract correctness** — HTTP status handling, retries/backoff,
+    serialization mismatches, schema drift
+16. **Configuration hygiene** — magic numbers, hardcoded values, safe defaults,
+    fail-fast on invalid config
+17. **Logging & diagnosability** — adequate debug signal, no sensitive data
+    in logs, actionable error context
+18. **TODO/FIXME/HACK audit** — resolve or remove stale markers
 
 ### Deliverable
 A review document in `docs/` named `Code-Review-YYMMDD.md` (or similar) with:

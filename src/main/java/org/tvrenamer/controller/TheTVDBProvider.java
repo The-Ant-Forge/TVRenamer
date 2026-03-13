@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import org.tvrenamer.controller.util.XmlUtilities;
 import javax.xml.xpath.XPathExpressionException;
 import org.tvrenamer.controller.util.StringUtils;
 import org.tvrenamer.model.DiscontinuedApiException;
@@ -36,8 +36,7 @@ public class TheTVDBProvider {
         TheTVDBProvider.class.getName()
     );
 
-    // The unique API key for our application
-    private static final String API_KEY = "4A9560FF0B2670B2";
+    private static final String API_KEY = TVDB_API_KEY;
 
     // Whether or not we should try making v1 API calls
     private static volatile boolean apiIsDeprecated = false;
@@ -190,24 +189,13 @@ public class TheTVDBProvider {
     }
 
     /**
-     * Create a DocumentBuilder with XXE (external entity) processing disabled.
-     * Since the XML comes from an external network source, this is a security
-     * precaution against XXE attacks.
+     * Create a DocumentBuilder with XXE protection, wrapping the checked
+     * exception into our application exception type.
      */
     private static DocumentBuilder createDocumentBuilder()
         throws TVRenamerIOException {
         try {
-            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            dbf.setFeature(
-                "http://apache.org/xml/features/disallow-doctype-decl", true
-            );
-            dbf.setFeature(
-                "http://xml.org/sax/features/external-general-entities", false
-            );
-            dbf.setFeature(
-                "http://xml.org/sax/features/external-parameter-entities", false
-            );
-            return dbf.newDocumentBuilder();
+            return XmlUtilities.createDocumentBuilder();
         } catch (ParserConfigurationException e) {
             logger.log(
                 Level.WARNING,

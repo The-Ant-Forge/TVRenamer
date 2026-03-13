@@ -1935,8 +1935,14 @@ public final class ResultsTable
 
         // Show the label if updates are available (in a new thread)
         UpdateChecker.notifyOfUpdate(updateIsAvailable -> {
-            if (updateIsAvailable) {
-                display.asyncExec(() -> updatesAvailableLink.setVisible(true));
+            if (updateIsAvailable
+                && display != null
+                && !display.isDisposed()) {
+                display.asyncExec(() -> {
+                    if (!updatesAvailableLink.isDisposed()) {
+                        updatesAvailableLink.setVisible(true);
+                    }
+                });
             }
         });
     }

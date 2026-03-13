@@ -2029,8 +2029,8 @@ class PreferencesDialog extends Dialog {
         setRowValidating(table, ti, token);
         updateSaveEnabledFromMatchingValidation();
 
-        // Run provider checks off the UI thread.
-        new Thread(
+        // Run provider checks off the UI thread (daemon so it won't block shutdown).
+        Thread validateThread = new Thread(
             () -> {
                 ValidationResult result;
                 try {
@@ -2055,7 +2055,7 @@ class PreferencesDialog extends Dialog {
                     ? preferencesShell.getDisplay()
                     : Display.getDefault();
 
-                if (display == null) {
+                if (display == null || display.isDisposed()) {
                     return;
                 }
 
@@ -2094,8 +2094,9 @@ class PreferencesDialog extends Dialog {
                 });
             },
             "tvrenamer-matching-validate"
-        )
-            .start();
+        );
+        validateThread.setDaemon(true);
+        validateThread.start();
     }
 
     private static final class ValidationResult {
