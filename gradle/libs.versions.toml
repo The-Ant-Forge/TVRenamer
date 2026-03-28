@@ -1,11 +1,11 @@
 [versions]
 # Tooling / plugins
-shadow = "9.4.0"
+shadow = "9.4.1"
 launch4j = "4.0.0"
 spotbugs = "6.4.8"
 
 # Runtime dependencies
-swt = "3.132.0"
+swt = "3.133.0"
 
 # Test dependencies
 junit5 = "5.14.3"

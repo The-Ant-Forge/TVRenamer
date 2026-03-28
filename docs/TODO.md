@@ -92,11 +92,11 @@ in `build.gradle` can be removed — they're harmless but unnecessary after that
 
 | Dependency | Version | Latest Available | Status |
 |------------|---------|------------------|--------|
-| SWT | 3.132.0 | 3.132.0 | ✅ Latest (fat-JAR workaround applied) |
+| SWT | 3.133.0 | 3.133.0 | ✅ Latest (fat-JAR workaround applied) |
 | AtomicParsley / ffmpeg | external | — | External tool for MP4 tagging |
 | JUnit | 5.14.3 | 5.14.3 | ✅ Latest (JUnit 5/Jupiter) |
 | Gradle | 9.3.1 | 9.3.1 | ✅ Latest |
-| Shadow Plugin | 9.3.2 | 9.3.2 | ✅ Latest |
+| Shadow Plugin | 9.4.1 | 9.4.1 | ✅ Latest |
 | Launch4j Plugin | 4.0.0 | 4.0.0 | ✅ Latest |
 | SpotBugs Plugin | 6.4.8 | 6.4.8 | ✅ Latest |
 

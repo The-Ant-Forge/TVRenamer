@@ -22,9 +22,9 @@ Key files:
 
 | Dependency | Version | Check for updates |
 |-----------|---------|-------------------|
-| SWT (win32 x86_64) | 3.132.0 | [mvnrepository](https://mvnrepository.com/artifact/org.eclipse.platform/org.eclipse.swt.win32.win32.x86_64) |
+| SWT (win32 x86_64) | 3.133.0 | [mvnrepository](https://mvnrepository.com/artifact/org.eclipse.platform/org.eclipse.swt.win32.win32.x86_64) |
 | JUnit 5 (Jupiter) | 5.14.3 | [mvnrepository](https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter) |
-| Shadow (fat JAR) | 9.4.0 | [mvnrepository](https://mvnrepository.com/artifact/com.gradleup.shadow/shadow-gradle-plugin) |
+| Shadow (fat JAR) | 9.4.1 | [mvnrepository](https://mvnrepository.com/artifact/com.gradleup.shadow/shadow-gradle-plugin) |
 | SpotBugs (plugin) | 6.4.8 | [mvnrepository](https://mvnrepository.com/artifact/com.github.spotbugs/com.github.spotbugs.gradle.plugin) |
 | Launch4j (EXE) | 4.0.0 | [mvnrepository](https://mvnrepository.com/artifact/edu.sc.seis.launch4j/edu.sc.seis.launch4j.gradle.plugin) |
 

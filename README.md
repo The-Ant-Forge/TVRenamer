@@ -134,7 +134,7 @@ CI (GitHub Actions) runs a Windows build and uploads artifacts:
 Current versions are managed via Gradle version catalogs (`gradle/libs.versions.toml`).
 
 Runtime dependencies:
-- SWT (Windows x64) 3.132.0
+- SWT (Windows x64) 3.133.0
 - JDK built-in XML (javax.xml) and HTTP (java.net.http) APIs
 
 Test dependencies:
