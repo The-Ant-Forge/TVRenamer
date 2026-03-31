@@ -27,7 +27,7 @@ This document consolidates "future work" notes from the codebase. Notes are grou
 ## Code Reliability & Maintenance
 
 ### SWT upgrade guardrail: monitor upstream fat-JAR manifest fix
-**Status:** Resolved — upgraded to SWT 3.132.0 (see `docs/Completed.md` #37).
+**Status:** Resolved — upgraded to SWT 3.133.0 (see `docs/Completed.md` #37).
 
 The root cause was commit `360a2702a7` (SWT PR #2054) adding a mandatory `isLoadable()` check
 that reads `SWT-OS`/`SWT-Arch` from the JAR manifest — attributes lost when Shadow merges JARs.
@@ -70,35 +70,6 @@ in `build.gradle` can be removed — they're harmless but unnecessary after that
 **Potential follow-ups:**
 - Define whether show mapping is strictly one-shot or can be incremental/async.
 - If async, design a listener contract that supports partial updates and finalization.
-
----
-
-## Test Suite Improvements
-
-### Document/standardize temp-dir cleanup expectations
-**Context:** The test suite places emphasis on cleaning up temp directories and leaving the environment as it was found, with notes about doing a "best-effort rm -rf" style cleanup when teardown fails.
-
-- Source:
-  - `org.tvrenamer.model.FileEpisodeTest` — teardown/cleanup commentary.
-
-**Potential follow-ups:**
-- Centralize temp-dir creation and teardown helpers so cleanup is consistent across tests.
-- Make cleanup more failure-tolerant while still surfacing root-cause failures (e.g., log what couldn't be deleted and why).
-- Ensure cleanup behavior is robust on Windows where file-locking is common.
-
----
-
-## Dependency Status (March 2026)
-
-| Dependency | Version | Latest Available | Status |
-|------------|---------|------------------|--------|
-| SWT | 3.133.0 | 3.133.0 | ✅ Latest (fat-JAR workaround applied) |
-| AtomicParsley / ffmpeg | external | — | External tool for MP4 tagging |
-| JUnit | 5.14.3 | 5.14.3 | ✅ Latest (JUnit 5/Jupiter) |
-| Gradle | 9.3.1 | 9.3.1 | ✅ Latest |
-| Shadow Plugin | 9.4.1 | 9.4.1 | ✅ Latest |
-| Launch4j Plugin | 4.0.0 | 4.0.0 | ✅ Latest |
-| SpotBugs Plugin | 6.4.8 | 6.4.8 | ✅ Latest |
 
 ---
 

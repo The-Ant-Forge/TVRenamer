@@ -680,6 +680,20 @@ Completes the code improvement opportunities document (all 24 items done).
   - **CLAUDE.md:** Expanded code review checklist from 12 to 18 categories (added concurrency, resource lifecycle, file I/O, API contracts, config hygiene, logging).
   - Renamed previous review docs to date-based convention (`Code-Review-260210.md`, `Code-Review-260304.md`).
 
+### 52) Standardize temp-dir cleanup in tests via @TempDir
+- **Why:** Manual temp-dir creation and teardown was fragile, especially on Windows where file-locking can prevent cleanup.
+- **Where:** `FileEpisodeTest.java`, `MoveTest.java`, `FileUtilsTest.java`
+- **What we did:**
+  - Migrated manual temp-dir management to JUnit 5 `@TempDir` annotation across test classes.
+  - JUnit handles creation and best-effort cleanup automatically, removing custom teardown code.
+  - Removed TODO item from `docs/TODO.md`.
+
+### 53) Remove duplicate dependency table from TODO.md
+- **Why:** Dependency versions and update links are now maintained in `CLAUDE.md` (added in v1.0.257 cycle). Keeping a second copy in TODO.md invited staleness.
+- **Where:** `docs/TODO.md`
+- **What we did:**
+  - Removed the dependency status table from TODO.md. Single source of truth is now `CLAUDE.md` and `gradle/libs.versions.toml`.
+
 ---
 
 ## Related records
