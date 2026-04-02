@@ -26,11 +26,9 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
-        with:
-          gradle-version: "9.3.1"
 
       - name: Build with Gradle
-        run: gradle build shadowJar createExe --info
+        run: ./gradlew build shadowJar createExe --info
 
       - name: Upload Windows Executable
         uses: actions/upload-artifact@v6
