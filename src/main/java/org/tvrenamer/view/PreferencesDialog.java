@@ -1277,6 +1277,7 @@ class PreferencesDialog extends Dialog {
             1
         );
         overridesTableData.minimumHeight = 110;
+        overridesTableData.heightHint = 180;
         overridesTable.setLayoutData(overridesTableData);
 
         TableColumn oColStatus = new TableColumn(overridesTable, SWT.CENTER);
@@ -1543,6 +1544,7 @@ class PreferencesDialog extends Dialog {
             1
         );
         disambiguationsTableData.minimumHeight = 110;
+        disambiguationsTableData.heightHint = 180;
         disambiguationsTable.setLayoutData(disambiguationsTableData);
 
         TableColumn dColStatus = new TableColumn(
