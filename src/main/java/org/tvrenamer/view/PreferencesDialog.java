@@ -1267,7 +1267,7 @@ class PreferencesDialog extends Dialog {
             SWT.BORDER | SWT.FULL_SELECTION | SWT.SINGLE
         );
         overridesTable.setHeaderVisible(true);
-        overridesTable.setLinesVisible(true);
+        overridesTable.setLinesVisible(false);
         GridData overridesTableData = new GridData(
             SWT.FILL,
             SWT.FILL,
@@ -1534,7 +1534,7 @@ class PreferencesDialog extends Dialog {
             SWT.BORDER | SWT.FULL_SELECTION | SWT.SINGLE
         );
         disambiguationsTable.setHeaderVisible(true);
-        disambiguationsTable.setLinesVisible(true);
+        disambiguationsTable.setLinesVisible(false);
         GridData disambiguationsTableData = new GridData(
             SWT.FILL,
             SWT.FILL,

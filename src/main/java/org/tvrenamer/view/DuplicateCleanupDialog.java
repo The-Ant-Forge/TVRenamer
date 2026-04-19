@@ -153,7 +153,7 @@ public final class DuplicateCleanupDialog extends Dialog {
         // Table with checkboxes.
         table = new Table(dialogShell, SWT.CHECK | SWT.BORDER | SWT.FULL_SELECTION | SWT.V_SCROLL);
         table.setHeaderVisible(true);
-        table.setLinesVisible(true);
+        table.setLinesVisible(false);
         GridData tableData = new GridData(SWT.FILL, SWT.FILL, true, true);
         tableData.heightHint = 200;
         table.setLayoutData(tableData);

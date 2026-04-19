@@ -216,7 +216,7 @@ public final class BatchShowDisambiguationDialog extends Dialog {
             SWT.BORDER | SWT.FULL_SELECTION | SWT.SINGLE
         );
         leftTable.setHeaderVisible(true);
-        leftTable.setLinesVisible(true);
+        leftTable.setLinesVisible(false);
 
         // Theme table + header for dark mode (match main table behavior).
         leftTable.setBackground(themePalette.getControlBackground());
@@ -277,7 +277,7 @@ public final class BatchShowDisambiguationDialog extends Dialog {
             SWT.BORDER | SWT.FULL_SELECTION | SWT.SINGLE | SWT.CHECK
         );
         rightCandidatesTable.setHeaderVisible(true);
-        rightCandidatesTable.setLinesVisible(true);
+        rightCandidatesTable.setLinesVisible(false);
 
         // Theme table + header for dark mode (match main table behavior).
         rightCandidatesTable.setBackground(themePalette.getControlBackground());

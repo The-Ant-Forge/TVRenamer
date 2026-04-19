@@ -241,7 +241,7 @@ public final class ThemeManager {
                 int count = table.getItemCount();
                 for (int i = 0; i < count; i++) {
                     TableItem item = table.getItem(i);
-                    if (item == null) {
+                    if (item == null || item.isDisposed()) {
                         continue;
                     }
                     if ((i % 2) == 1) {
