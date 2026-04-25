@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subtitle Merging - TVRenamer Help</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <a href="index.html" class="back-link">&larr; Back to Help Index</a>
+
+    <h1>Subtitle Merging</h1>
+
+    <p>TVRenamer can locate sibling subtitle files (<code>.srt</code>, <code>.ass</code>, <code>.ssa</code>, <code>.vtt</code>) and merge them as soft subtitle tracks into the renamed media file. This eliminates loose subtitle files alongside your media library and gives every player native support without external <code>.srt</code> companions.</p>
+
+    <h2>Enabling Subtitle Merging</h2>
+    <ol>
+        <li>Open <strong>Preferences</strong> &rarr; <strong>General</strong></li>
+        <li>Check "Merge sibling subtitle files into renamed media"</li>
+        <li>Pick a <strong>Default language</strong> from the dropdown (used when a subtitle filename has no language tag of its own).</li>
+        <li>Optionally enable "Delete subtitle files after successful merge" to remove the original <code>.srt</code>/<code>.ass</code>/<code>.vtt</code> after a confirmed merge + move.</li>
+        <li>Save preferences.</li>
+    </ol>
+    <p>Subtitle merging happens automatically when files are renamed/moved. The merge runs against the source file (typically a fast local disk) before the move, then the move proceeds normally.</p>
+
+    <h2>Required External Tools</h2>
+
+    <h3>MP4 / M4V</h3>
+    <p><strong>Requires MP4Box</strong> (part of the GPAC project).</p>
+    <ol>
+        <li>Download GPAC from <a href="https://gpac.io" target="_blank">gpac.io</a></li>
+        <li>Install using the Windows installer</li>
+        <li>Default location: <code>C:\Program Files\GPAC</code></li>
+    </ol>
+    <p>TVRenamer automatically detects <code>MP4Box.exe</code> if installed in the default location or anywhere on your PATH.</p>
+
+    <h3>MKV</h3>
+    <p><strong>Requires mkvmerge</strong> (part of MKVToolNix &mdash; the same package that powers MKV metadata tagging).</p>
+    <ol>
+        <li>Download from <a href="https://mkvtoolnix.download/" target="_blank">mkvtoolnix.download</a></li>
+        <li>Install using the Windows installer</li>
+        <li>Default location: <code>C:\Program Files\MKVToolNix</code></li>
+    </ol>
+
+    <div class="note">
+        <strong>Note:</strong> If neither tool is installed for a given format, those files are simply moved without merged subtitles. TVRenamer logs a single notice per session and skips the merge silently for the rest of the run.
+    </div>
+
+    <h2>How Subtitle Files Are Paired</h2>
+
+    <p>For a media file like <code>Westmark Academy.S01E02.mkv</code>, TVRenamer scans the same directory for sibling subtitle files whose name starts with the media file's base name and ends with a supported subtitle extension.</p>
+
+    <h3>Bare match</h3>
+    <ul>
+        <li><code>Westmark Academy.S01E02.srt</code> &rarr; uses your default language preference.</li>
+    </ul>
+
+    <h3>Language-tagged matches</h3>
+    <ul>
+        <li><code>Westmark Academy.S01E02.en.srt</code> &rarr; English (2-letter ISO code)</li>
+        <li><code>Westmark Academy.S01E02.eng.srt</code> &rarr; English (3-letter ISO code)</li>
+        <li><code>Westmark Academy.S01E02.french.srt</code> &rarr; French (full English name)</li>
+        <li><code>Westmark Academy.S01E02.pt-BR.srt</code> &rarr; Portuguese with region tag (track named "Portuguese (BR)")</li>
+    </ul>
+
+    <h3>Track-flavour descriptors</h3>
+    <p>Filename suffixes set the corresponding container flag where supported (mkvmerge sets per-track flags; MP4Box embeds them in the track name).</p>
+    <ul>
+        <li><code>.sdh</code>, <code>.cc</code>, <code>.hi</code>, <code>.hearingimpaired</code> &rarr; hearing-impaired</li>
+        <li><code>.forced</code> &rarr; forced display</li>
+        <li><code>.commentary</code> &rarr; commentary track</li>
+        <li><code>.signs</code>, <code>.songs</code>, <code>.dub</code> &rarr; preserved as track name only</li>
+    </ul>
+
+    <p>Multiple descriptors combine: <code>Westmark Academy.S01E02.en.sdh.forced.srt</code> &rarr; track name "English (Forced, SDH)".</p>
+
+    <h3>Multiple subtitle files</h3>
+    <p>If several subtitle files match the same media, all are merged as separate tracks. Order: language-tagged tracks first (sorted by language code), then bare matches.</p>
+
+    <h2>Format Compatibility</h2>
+
+    <table>
+        <tr>
+            <th>Subtitle format</th>
+            <th>MP4 (MP4Box)</th>
+            <th>MKV (mkvmerge)</th>
+        </tr>
+        <tr>
+            <td><code>.srt</code> (SubRip)</td>
+            <td>&#10003; (auto-converts to TX3G)</td>
+            <td>&#10003;</td>
+        </tr>
+        <tr>
+            <td><code>.vtt</code> (WebVTT)</td>
+            <td>&#10003;</td>
+            <td>&#10003;</td>
+        </tr>
+        <tr>
+            <td><code>.ass</code>, <code>.ssa</code> (Advanced SubStation Alpha)</td>
+            <td>&#10007; (skipped with warning &mdash; MP4Box rejects ASS in MP4)</td>
+            <td>&#10003;</td>
+        </tr>
+    </table>
+
+    <h2>Idempotency &mdash; Safe to Re-run</h2>
+    <p>Before merging, TVRenamer inspects the media file for existing subtitle tracks. If the container already has a track in the language we'd otherwise merge, that language is skipped &mdash; re-running the rename pipeline never adds duplicate tracks.</p>
+
+    <h2>Failure Handling</h2>
+    <ul>
+        <li><strong>Tool not on PATH:</strong> the file moves normally without merged subtitles. Logged once per session.</li>
+        <li><strong>Tool error or unsupported codec:</strong> logged, the file moves with its original (external) subtitles untouched.</li>
+        <li><strong>Atomic swap fails after merge</strong> (rare &mdash; usually transient AV/indexer locks): the merged temp file is preserved alongside the source as <code>&lt;source&gt;.merging.&lt;ext&gt;</code> for manual recovery. Look for it if a merge silently doesn't take effect.</li>
+        <li><strong>Move fails after merge:</strong> the merged source file remains where it is &mdash; a valid playable file. The user's original sibling subtitle files are NOT deleted unless the move succeeded.</li>
+    </ul>
+
+    <h2>Verifying Merged Tracks</h2>
+    <h3>For MKV Files</h3>
+    <ul>
+        <li>Use <strong>MKVToolNix GUI</strong> &rarr; Header editor</li>
+        <li>Command line: <code>mkvinfo file.mkv</code> or <code>mkvmerge --identify file.mkv</code></li>
+    </ul>
+
+    <h3>For MP4 Files</h3>
+    <ul>
+        <li>Command line: <code>MP4Box -info file.mp4</code></li>
+        <li>Use <a href="https://mediaarea.net/MediaInfo" target="_blank">MediaInfo</a> for a friendly summary</li>
+    </ul>
+
+    <h2>Troubleshooting</h2>
+
+    <h3>"MP4Box not found" / "mkvmerge not found" status label</h3>
+    <ul>
+        <li>Verify the tool is installed</li>
+        <li>Check that the install directory is on your system PATH</li>
+        <li>Re-launch TVRenamer after a PATH change &mdash; tool detection is cached per session</li>
+    </ul>
+
+    <h3>Subtitle file is in the right folder but isn't being picked up</h3>
+    <ul>
+        <li>Verify the subtitle filename starts with the exact base name of the media file (the part before the final extension), followed by a dot, then the language tag (if any), then the subtitle extension.</li>
+        <li>Filename matching is case-insensitive but must be a prefix match.</li>
+        <li>Check TVRenamer logs (<code>-Dtvrenamer.debug=true</code>) for "Looking for subtitles" entries.</li>
+    </ul>
+
+    <h3>Media player doesn't show the new track</h3>
+    <ul>
+        <li>Some players cache track lists per-file &mdash; close and reopen the file</li>
+        <li>Refresh your library/metadata in your media manager (Plex, Jellyfin, Kodi)</li>
+    </ul>
+
+    <hr>
+    <p><a href="index.html">&larr; Back to Help Index</a></p>
+</body>
+</html>

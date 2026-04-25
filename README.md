@@ -137,11 +137,17 @@ Runtime dependencies:
 - SWT (Windows x64) 3.133.0
 - JDK built-in XML (javax.xml) and HTTP (java.net.http) APIs
 
+Optional external tools (only used when the matching feature is enabled in Preferences):
+- AtomicParsley or ffmpeg — MP4 metadata tagging
+- mkvpropedit (from MKVToolNix) — MKV metadata tagging
+- MP4Box (from GPAC, gpac.io) — MP4 subtitle merging
+- mkvmerge (from MKVToolNix, mkvtoolnix.org) — MKV subtitle merging
+
 Test dependencies:
 - JUnit 5.14.3 (Jupiter)
 
 Build tooling:
-- Gradle 9.3.1
+- Gradle 9.4.1
 - Shadow plugin 9.3.2 (GradleUp)
 - Launch4j Gradle plugin 4.0.0
 - SpotBugs plugin 6.4.8

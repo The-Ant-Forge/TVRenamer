@@ -694,6 +694,25 @@ Completes the code improvement opportunities document (all 24 items done).
 - **What we did:**
   - Removed the dependency status table from TODO.md. Single source of truth is now `CLAUDE.md` and `gradle/libs.versions.toml`.
 
+### 54) Subtitle merge — auto-mux SRT/ASS/VTT siblings into renamed media
+- **Why:** Users who maintain a personal media library frequently have external subtitle files (.srt, .ass, .vtt) sitting next to the corresponding episode files. Embedding subtitles into the container means one fewer file to manage per episode and proper subtitle support in any player.
+- **Where:** new package `org.tvrenamer.controller.subtitle` (9 production files, 7 test files); 3 new persisted preferences in `UserPreferences`; new "Subtitles" group on the General tab of `PreferencesDialog`; merge hookup in `FileMover.doActualMove`.
+- **What we did:**
+  - **Pure logic layer:** `SubtitleLanguages` (30-language catalogue with B/T-form normalisation and BCP-47 region tags), `SubtitlePairing` (parses sibling subtitle files, classifies tokens as language tags or descriptors — SDH/Forced/Commentary/Signs/Songs/Dub).
+  - **Per-format mergers:** `Mp4SubtitleMerger` (MP4Box, .srt + .vtt), `MkvSubtitleMerger` (mkvmerge, .srt + .ass + .ssa + .vtt). Each builds the right CLI args (lang code, track name, mkvmerge per-track flags), runs the tool with a size-scaled timeout, and delegates to `SubtitleSwap` for the temp-and-replace dance.
+  - **Temp+swap discipline:** `SubtitleSwap` does an integrity gate (temp must exist and be ≥80% of source size — catches truncated output) then a 3× retry-with-backoff swap (handles transient AV/indexer locks on Windows). On retry exhaustion, the merged temp file is *preserved* (not deleted) so the user can recover manually.
+  - **Idempotency:** before merging, the controller asks each merger whether the container already has a subtitle track in the target language (`mkvmerge --identify --identification-format json` for MKV; `MP4Box -info` line scan for MP4). Existing languages are dropped from the merge — re-running the rename pipeline never adds duplicate tracks.
+  - **`SubtitleMergeController`:** orchestrates pairing → format/codec filtering → idempotency → merge. 7-state `Result` enum (`SUCCESS`, `DISABLED`, `NO_SUBTITLES_FOUND`, `NO_TOOL`, `ALREADY_HAS_LANGUAGE`, `UNSUPPORTED`, `FAILED`). Once-per-session log gate for missing-tool warnings. Best-effort stale-temp cleanup of orphaned `*.merging.*` files older than 1 hour. Does NOT delete sibling subtitles — that's `FileMover`'s job.
+  - **`FileMover` integration:** captures sibling subtitle paths at source time, runs the merge BEFORE the move (source-disk I/O is faster than NAS/external destination), runs the existing metadata tagger AFTER the move (preserved behaviour), and deletes captured siblings only on confirmed move success (gated on `episode.isSuccess()`). The unified deletion site covers both rename-style moves and cross-volume copy+delete.
+  - **Preferences UI:** new "Subtitles" group on the General tab with master toggle, language Combo (read-only, populated from the 30-entry catalogue), delete-after-merge checkbox, and a tool-status label ("MP4Box: detected · mkvmerge: detected"). One-shot warning MessageBox if the user enables merging while no tools are detected. Forward-compat: a saved language code not in the dropdown silently coerces to English.
+  - **Implementation strategy:** parallelised across four agent waves with worktree isolation — wave 1 (3 agents: pairing, swap helper, preferences), wave 2 (2 agents: MKV and MP4 mergers), wave 3 (1 agent: controller), wave 4 (2 agents: FileMover hookup, UI). About ~6,500 LOC and ~160 unit tests added across the feature.
+- **Notes:**
+  - Initial scope: Windows + macOS + Linux containers `.mp4`/`.m4v` (MP4Box) and `.mkv` (mkvmerge). External tools must be on PATH; missing tools degrade gracefully (the move proceeds without merging, logged once per session).
+  - Spec: `docs/Subtitle Merge Spec.md`. Plan: `docs/Subtitle Merge Plan.md`.
+  - Codex-reviewed. Rejected suggestions documented at the end of the spec.
+  - The two mergers ended up using different test-indirection patterns (MKV: subclass override of `runProcess`; MP4: `volatile RunOperation` field). Both work; unification is captured as a code-review-round-4 follow-up.
+  - Out of scope for v1 (in `docs/TODO.md`): ffmpeg fallback for MKV when mkvmerge is missing, `.mov`/`.webm` containers, "Custom language…" dropdown entry for long-tail languages, SRT encoding detection.
+
 ---
 
 ## Related records
@@ -705,3 +724,4 @@ Completes the code improvement opportunities document (all 24 items done).
   - `docs/Unifying Matches Spec.md`
   - `docs/Strings Spec.md`
   - `docs/Episode Chain Spec.md`
+  - `docs/Subtitle Merge Spec.md`
