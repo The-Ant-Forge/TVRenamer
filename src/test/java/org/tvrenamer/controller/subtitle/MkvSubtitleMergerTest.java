@@ -35,7 +35,7 @@ import org.tvrenamer.controller.util.ProcessRunner;
  *       {@link ProcessRunner.Result} values; an optional {@link Runnable}
  *       side-effect lets a test materialise a temp file before merge() inspects
  *       it.</li>
- *   <li>{@link MkvSubtitleMerger#setToolPathForTest(String)} primes the
+ *   <li>{@link MkvSubtitleMerger#setToolPathForTesting(String)} primes the
  *       static detection cache so {@code ensureDetected()} returns true (or
  *       false) without probing PATH.  {@link #resetCaches()} resets it between
  *       tests.</li>
@@ -52,13 +52,13 @@ class MkvSubtitleMergerTest {
 
     @BeforeEach
     void resetCaches() {
-        MkvSubtitleMerger.resetDetectionForTest();
+        MkvSubtitleMerger.resetDetectionForTesting();
         SubtitleSwap.resetMoveOperation();
     }
 
     @AfterEach
     void clearCaches() {
-        MkvSubtitleMerger.resetDetectionForTest();
+        MkvSubtitleMerger.resetDetectionForTesting();
         SubtitleSwap.resetMoveOperation();
     }
 
@@ -233,7 +233,7 @@ class MkvSubtitleMergerTest {
                 + "\"codec_id\":\"S_TEXT/UTF8\"}}"
             + "]}";
         FakeMerger merger = new FakeMerger().withResult(success(json));
-        MkvSubtitleMerger.setToolPathForTest(FAKE_TOOL_PATH);
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
         assertTrue(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -247,7 +247,7 @@ class MkvSubtitleMergerTest {
             + "{\"id\":1,\"type\":\"subtitles\",\"properties\":{\"language\":\"fre\"}}"
             + "]}";
         FakeMerger merger = new FakeMerger().withResult(success(json));
-        MkvSubtitleMerger.setToolPathForTest(FAKE_TOOL_PATH);
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -261,7 +261,7 @@ class MkvSubtitleMergerTest {
             + "{\"id\":1,\"type\":\"audio\",\"properties\":{\"language\":\"eng\"}}"
             + "]}";
         FakeMerger merger = new FakeMerger().withResult(success(json));
-        MkvSubtitleMerger.setToolPathForTest(FAKE_TOOL_PATH);
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -272,7 +272,7 @@ class MkvSubtitleMergerTest {
         Path media = touch(dir.resolve("show.mkv"));
         FakeMerger merger = new FakeMerger().withResult(
             new ProcessRunner.Result(false, 2, "ERROR: file not recognised\n"));
-        MkvSubtitleMerger.setToolPathForTest(FAKE_TOOL_PATH);
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -285,7 +285,7 @@ class MkvSubtitleMergerTest {
         // not match any subtitles+language pair.
         String junk = "{not really json at all <<<";
         FakeMerger merger = new FakeMerger().withResult(success(junk));
-        MkvSubtitleMerger.setToolPathForTest(FAKE_TOOL_PATH);
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -295,7 +295,7 @@ class MkvSubtitleMergerTest {
             @TempDir Path dir) throws IOException {
         Path media = touch(dir.resolve("show.mkv"));
         FakeMerger merger = new FakeMerger().withResult(success(""));
-        MkvSubtitleMerger.setToolPathForTest(FAKE_TOOL_PATH);
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -305,7 +305,7 @@ class MkvSubtitleMergerTest {
         Path media = touch(dir.resolve("show.mkv"));
         FakeMerger merger = new FakeMerger();
         // Empty path string = "tool not found" cached state.
-        MkvSubtitleMerger.setToolPathForTest("");
+        MkvSubtitleMerger.setToolPathForTesting("");
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -333,7 +333,7 @@ class MkvSubtitleMergerTest {
             EnumSet.noneOf(Descriptor.class));
         FakeMerger merger = new FakeMerger();
         // Cache "tool not found".
-        MkvSubtitleMerger.setToolPathForTest("");
+        MkvSubtitleMerger.setToolPathForTesting("");
 
         MergeOutcome outcome = merger.merge(media, List.of(entry));
 
@@ -347,7 +347,7 @@ class MkvSubtitleMergerTest {
         Path sub = touch(dir.resolve("show.en.srt"), 30);
         SubtitleEntry entry = new SubtitleEntry(sub, "eng", "English",
             EnumSet.noneOf(Descriptor.class));
-        MkvSubtitleMerger.setToolPathForTest(FAKE_TOOL_PATH);
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
         // Side effect: when the fake "process" runs, write the new merged content
         // to the expected temp file location so the integrity gate passes and
@@ -393,7 +393,7 @@ class MkvSubtitleMergerTest {
         Path sub = touch(dir.resolve("show.en.srt"), 20);
         SubtitleEntry entry = new SubtitleEntry(sub, "eng", "English",
             EnumSet.noneOf(Descriptor.class));
-        MkvSubtitleMerger.setToolPathForTest(FAKE_TOOL_PATH);
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
         Path expectedTemp = dir.resolve("show.mkv.merging.mkv");
         // Even on failure, write a temp file so we can confirm the production
@@ -422,7 +422,7 @@ class MkvSubtitleMergerTest {
         Path sub = touch(dir.resolve("show.en.srt"), 20);
         SubtitleEntry entry = new SubtitleEntry(sub, "eng", "English",
             EnumSet.noneOf(Descriptor.class));
-        MkvSubtitleMerger.setToolPathForTest(FAKE_TOOL_PATH);
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
         Path expectedTemp = dir.resolve("show.mkv.merging.mkv");
         // mkvmerge "succeeds" but writes a 0-byte temp file.  0 bytes is far
@@ -490,21 +490,34 @@ class MkvSubtitleMergerTest {
     }
 
     /**
-     * Test fake: subclass of the production class that overrides
-     * {@link MkvSubtitleMerger#runProcess(List, int)} to:
+     * Test fake that combines two roles in one object so existing tests
+     * don't have to thread a separate recorder alongside the merger:
      *
      * <ul>
-     *   <li>record the command list and timeout for assertions,</li>
-     *   <li>optionally execute a {@link IoRunnable} side-effect (e.g. to write
-     *       the temp file the integrity gate is about to inspect),</li>
-     *   <li>return a canned {@link ProcessRunner.Result}.</li>
+     *   <li>Implements {@link ProcessOps.Run} and {@link ProcessOps.Streaming}
+     *       — these are the recording hooks the inner merger calls when it
+     *       would normally spawn a real process.</li>
+     *   <li>Implements {@link SubtitleMerger} by delegating every method to
+     *       a held inner {@link MkvSubtitleMerger} that was constructed with
+     *       {@code this} injected as both ops.  Tests can call
+     *       {@code merger.merge(...)} or {@code merger.alreadyHasLanguageTrack(...)}
+     *       directly on the fake and the captures still happen in this
+     *       object's lists.</li>
      * </ul>
+     *
+     * <p>The inner merger is final and constructed eagerly during
+     * initialiser execution; {@code this} is well-defined at that point in
+     * Java (the FakeMerger object exists and its fields are zero-initialised).
      */
-    private static final class FakeMerger extends MkvSubtitleMerger {
+    private static final class FakeMerger
+            implements SubtitleMerger, ProcessOps.Run, ProcessOps.Streaming {
         private ProcessRunner.Result canned = success("");
         private IoRunnable sideEffect = null;
         private final List<List<String>> commands = new ArrayList<>();
         private final List<Integer> timeouts = new ArrayList<>();
+
+        private final MkvSubtitleMerger inner =
+            new MkvSubtitleMerger(this, this);
 
         FakeMerger withResult(ProcessRunner.Result result) {
             this.canned = result;
@@ -524,8 +537,10 @@ class MkvSubtitleMergerTest {
             return commands.isEmpty() ? null : commands.get(commands.size() - 1);
         }
 
+        // ---- ProcessOps recording ----
+
         @Override
-        ProcessRunner.Result runProcess(List<String> command, int timeoutSeconds) {
+        public ProcessRunner.Result run(List<String> command, int timeoutSeconds) {
             commands.add(List.copyOf(command));
             timeouts.add(timeoutSeconds);
             if (sideEffect != null) {
@@ -536,6 +551,41 @@ class MkvSubtitleMergerTest {
                 }
             }
             return canned;
+        }
+
+        @Override
+        public ProcessRunner.Result run(List<String> command, int timeoutSeconds,
+                                        java.util.function.Consumer<String> onLine) {
+            // Streaming variant — reuse the same recording + canned result.
+            return run(command, timeoutSeconds);
+        }
+
+        // ---- SubtitleMerger pass-through ----
+
+        @Override
+        public boolean supportsContainerExtension(String ext) {
+            return inner.supportsContainerExtension(ext);
+        }
+        @Override
+        public boolean supportsSubtitleExtension(String ext) {
+            return inner.supportsSubtitleExtension(ext);
+        }
+        @Override
+        public boolean isToolAvailable() {
+            return inner.isToolAvailable();
+        }
+        @Override
+        public String getToolName() {
+            return inner.getToolName();
+        }
+        @Override
+        public boolean alreadyHasLanguageTrack(Path mediaFile, String langCode3) {
+            return inner.alreadyHasLanguageTrack(mediaFile, langCode3);
+        }
+        @Override
+        public MergeOutcome merge(Path mediaFile, List<SubtitleEntry> subtitles,
+                                  java.util.function.IntConsumer onProgress) {
+            return inner.merge(mediaFile, subtitles, onProgress);
         }
     }
 }

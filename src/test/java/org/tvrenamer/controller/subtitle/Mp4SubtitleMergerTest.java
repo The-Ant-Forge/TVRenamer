@@ -12,7 +12,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,11 +23,12 @@ import org.tvrenamer.controller.util.ProcessRunner;
 /**
  * Unit tests for {@link Mp4SubtitleMerger}.
  *
- * <p>Tests never spawn the real {@code MP4Box} binary.  They route the
- * merger's process spawning through {@link Mp4SubtitleMerger.RunOperation},
- * which is a package-private indirection installed at the start of each test
- * and reset in {@code @AfterEach}.  Detection state is forced via
- * {@link Mp4SubtitleMerger#setDetectedForTesting(String)} so the merger
+ * <p>Tests never spawn the real {@code MP4Box} binary.  Process spawning is
+ * intercepted via the constructor-injected {@link ProcessOps.Run} /
+ * {@link ProcessOps.Streaming} indirection — the {@link FakeMerger} below
+ * implements both and is passed to a held inner {@link Mp4SubtitleMerger}.
+ * Detection state is forced via
+ * {@link Mp4SubtitleMerger#setToolPathForTesting(String)} so the merger
  * doesn't probe the host's PATH.
  *
  * <p>Test names use plausible fictional show names (Solar Drift, Westmark
@@ -39,17 +39,16 @@ class Mp4SubtitleMergerTest {
     /** Stand-in MP4Box path the tests pretend was discovered. */
     private static final String FAKE_MP4BOX = "MP4Box";
 
-    private Mp4SubtitleMerger merger;
+    private FakeMerger merger;
 
     @BeforeEach
     void setUp() {
-        merger = new Mp4SubtitleMerger();
-        Mp4SubtitleMerger.setDetectedForTesting(FAKE_MP4BOX);
+        merger = new FakeMerger();
+        Mp4SubtitleMerger.setToolPathForTesting(FAKE_MP4BOX);
     }
 
     @AfterEach
     void tearDown() {
-        Mp4SubtitleMerger.resetRunOperation();
         Mp4SubtitleMerger.resetDetectionForTesting();
         SubtitleSwap.resetMoveOperation();
     }
@@ -120,22 +119,14 @@ class Mp4SubtitleMergerTest {
         SubtitleEntry entry = new SubtitleEntry(
             sub, "eng", "English", EnumSet.noneOf(Descriptor.class));
 
-        AtomicReference<List<String>> seen = new AtomicReference<>();
         // Fake: copy media into temp so integrity gate passes, exit 0.
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) -> {
-            seen.set(new ArrayList<>(cmd));
-            try {
-                Files.copy(media, expectedTemp);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            return new ProcessRunner.Result(true, 0, "");
-        });
+        merger.withResult(success(""))
+              .withSideEffect(() -> Files.copy(media, expectedTemp));
 
         SubtitleMerger.MergeOutcome outcome = merger.merge(media, List.of(entry));
 
         assertEquals(SubtitleMerger.MergeOutcome.SUCCESS, outcome);
-        List<String> cmd = seen.get();
+        List<String> cmd = merger.lastCommand();
         assertNotNull(cmd, "fake should have observed a command");
 
         List<String> expected = List.of(
@@ -161,16 +152,8 @@ class Mp4SubtitleMergerTest {
         SubtitleEntry e2 = new SubtitleEntry(
             sub2, "fre", "French", EnumSet.noneOf(Descriptor.class));
 
-        AtomicReference<List<String>> seen = new AtomicReference<>();
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) -> {
-            seen.set(new ArrayList<>(cmd));
-            try {
-                Files.copy(media, expectedTemp);
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
-            }
-            return new ProcessRunner.Result(true, 0, "");
-        });
+        merger.withResult(success(""))
+              .withSideEffect(() -> Files.copy(media, expectedTemp));
 
         SubtitleMerger.MergeOutcome outcome = merger.merge(media, List.of(e1, e2));
 
@@ -182,7 +165,7 @@ class Mp4SubtitleMergerTest {
             "-out", expectedTemp.toString(),
             media.toString()
         );
-        assertEquals(expected, seen.get());
+        assertEquals(expected, merger.lastCommand());
     }
 
     @Test
@@ -194,21 +177,13 @@ class Mp4SubtitleMergerTest {
         SubtitleEntry e = new SubtitleEntry(
             sub, "eng", "Foo: Bar=Baz", EnumSet.noneOf(Descriptor.class));
 
-        AtomicReference<List<String>> seen = new AtomicReference<>();
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) -> {
-            seen.set(new ArrayList<>(cmd));
-            try {
-                Files.copy(media, expectedTemp);
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
-            }
-            return new ProcessRunner.Result(true, 0, "");
-        });
+        merger.withResult(success(""))
+              .withSideEffect(() -> Files.copy(media, expectedTemp));
 
         merger.merge(media, List.of(e));
 
         // Find the -add entry and assert it embeds the sanitised name.
-        List<String> cmd = seen.get();
+        List<String> cmd = merger.lastCommand();
         int addIdx = cmd.indexOf("-add");
         assertTrue(addIdx >= 0, "command should contain a -add token");
         String addArg = cmd.get(addIdx + 1);
@@ -253,8 +228,7 @@ class Mp4SubtitleMergerTest {
     void alreadyHasLanguageTrack_subtTx3gWithEng_returnsTrueForEng(@TempDir Path dir)
             throws IOException {
         Path media = Files.createFile(dir.resolve("Solar Drift.mp4"));
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(true, 0, REAL_MP4BOX_OUTPUT_WITH_SUBTITLE));
+        merger.withResult(success(REAL_MP4BOX_OUTPUT_WITH_SUBTITLE));
 
         assertTrue(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -263,8 +237,7 @@ class Mp4SubtitleMergerTest {
     void alreadyHasLanguageTrack_onlyEngPresent_returnsFalseForFre(@TempDir Path dir)
             throws IOException {
         Path media = Files.createFile(dir.resolve("Solar Drift.mp4"));
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(true, 0, REAL_MP4BOX_OUTPUT_WITH_SUBTITLE));
+        merger.withResult(success(REAL_MP4BOX_OUTPUT_WITH_SUBTITLE));
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "fre"));
     }
@@ -282,8 +255,7 @@ class Mp4SubtitleMergerTest {
             Media Language: English (eng)
             Media Type: soun:mp4a
             """;
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(true, 0, info));
+        merger.withResult(success(info));
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -293,8 +265,7 @@ class Mp4SubtitleMergerTest {
         Path media = Files.createFile(dir.resolve("Solar Drift.mp4"));
         // Output mentions Subtitle + eng but the exit code is non-zero - should be ignored.
         String info = "Media Type \"subt:tx3g\" - Subtitle in language: eng\n";
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(false, 1, info));
+        merger.withResult(new ProcessRunner.Result(false, 1, info));
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -302,8 +273,7 @@ class Mp4SubtitleMergerTest {
     @Test
     void alreadyHasLanguageTrack_emptyOutput_returnsFalse(@TempDir Path dir) throws IOException {
         Path media = Files.createFile(dir.resolve("Solar Drift.mp4"));
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(true, 0, ""));
+        merger.withResult(success(""));
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -321,8 +291,7 @@ class Mp4SubtitleMergerTest {
             # Track 2 Info - ID 2 - TimeScale 1000
             Media Type: subt:tx3g - Subtitle in language: eng
             """;
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(true, 0, info));
+        merger.withResult(success(info));
 
         assertTrue(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -337,8 +306,7 @@ class Mp4SubtitleMergerTest {
             Media Type: text:tx3g
             Media Language: English (ENG)
             """;
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(true, 0, info));
+        merger.withResult(success(info));
 
         assertTrue(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -347,22 +315,17 @@ class Mp4SubtitleMergerTest {
 
     @Test
     void merge_emptySubtitleList_returnsSuccessAndDoesNotInvokeTool() {
-        AtomicReference<Boolean> invoked = new AtomicReference<>(Boolean.FALSE);
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) -> {
-            invoked.set(Boolean.TRUE);
-            return new ProcessRunner.Result(true, 0, "");
-        });
-
         SubtitleMerger.MergeOutcome outcome = merger.merge(Path.of("ignored.mp4"), List.of());
 
         assertEquals(SubtitleMerger.MergeOutcome.SUCCESS, outcome);
-        assertFalse(invoked.get(), "tool must not be invoked when subtitle list is empty");
+        assertEquals(0, merger.callCount(),
+            "tool must not be invoked when subtitle list is empty");
     }
 
     @Test
     void merge_toolNotDetected_returnsSkippedNoTool(@TempDir Path dir) throws IOException {
         // Force "not detected" state.
-        Mp4SubtitleMerger.setDetectedForTesting(null);
+        Mp4SubtitleMerger.setToolPathForTesting(null);
 
         Path media = writeBytes(dir.resolve("Solar Drift.mp4"), 100);
         Path sub = writeBytes(dir.resolve("Solar Drift.srt"), 50);
@@ -387,14 +350,8 @@ class Mp4SubtitleMergerTest {
             sub, "eng", "English", EnumSet.noneOf(Descriptor.class));
 
         // Fake MP4Box: write a slightly larger temp (1100 bytes >= 80% of 1000).
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) -> {
-            try {
-                Files.write(expectedTemp, new byte[1100]);
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
-            }
-            return new ProcessRunner.Result(true, 0, "");
-        });
+        merger.withResult(success(""))
+              .withSideEffect(() -> Files.write(expectedTemp, new byte[1100]));
 
         SubtitleMerger.MergeOutcome outcome = merger.merge(media, List.of(e));
 
@@ -418,8 +375,7 @@ class Mp4SubtitleMergerTest {
         SubtitleEntry e = new SubtitleEntry(
             sub, "eng", "English", EnumSet.noneOf(Descriptor.class));
 
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(false, 7, "MP4Box: simulated error"));
+        merger.withResult(new ProcessRunner.Result(false, 7, "MP4Box: simulated error"));
 
         SubtitleMerger.MergeOutcome outcome = merger.merge(media, List.of(e));
 
@@ -441,14 +397,8 @@ class Mp4SubtitleMergerTest {
             sub, "eng", "English", EnumSet.noneOf(Descriptor.class));
 
         // Fake exit-0 but write a 0-byte temp - integrity gate should reject it.
-        Mp4SubtitleMerger.setRunOperation((cmd, timeout) -> {
-            try {
-                Files.write(tempPath, new byte[0]);
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
-            }
-            return new ProcessRunner.Result(true, 0, "");
-        });
+        merger.withResult(success(""))
+              .withSideEffect(() -> Files.write(tempPath, new byte[0]));
 
         SubtitleMerger.MergeOutcome outcome = merger.merge(media, List.of(e));
 
@@ -459,6 +409,11 @@ class Mp4SubtitleMergerTest {
     }
 
     // ---------- helpers ----------
+
+    /** Build a {@link ProcessRunner.Result} representing a successful run. */
+    private static ProcessRunner.Result success(String output) {
+        return new ProcessRunner.Result(true, 0, output);
+    }
 
     private static Path writeBytes(Path path, int size) throws IOException {
         byte[] payload = new byte[size];
@@ -477,5 +432,107 @@ class Mp4SubtitleMergerTest {
     @SuppressWarnings("unused")
     private static void writeText(Path path, String text) throws IOException {
         Files.writeString(path, text, StandardCharsets.UTF_8);
+    }
+
+    /** Side-effect hook that may throw {@link IOException}. */
+    @FunctionalInterface
+    interface IoRunnable {
+        void run() throws IOException;
+    }
+
+    /**
+     * Test fake that combines two roles in one object so existing tests
+     * don't have to thread a separate recorder alongside the merger:
+     *
+     * <ul>
+     *   <li>Implements {@link ProcessOps.Run} and {@link ProcessOps.Streaming}
+     *       — these are the recording hooks the inner merger calls when it
+     *       would normally spawn a real process.</li>
+     *   <li>Implements {@link SubtitleMerger} by delegating every method to
+     *       a held inner {@link Mp4SubtitleMerger} that was constructed with
+     *       {@code this} injected as both ops.  Tests can call
+     *       {@code merger.merge(...)} or {@code merger.alreadyHasLanguageTrack(...)}
+     *       directly on the fake and the captures still happen in this
+     *       object's lists.</li>
+     * </ul>
+     */
+    private static final class FakeMerger
+            implements SubtitleMerger, ProcessOps.Run, ProcessOps.Streaming {
+        private ProcessRunner.Result canned = success("");
+        private IoRunnable sideEffect = null;
+        private final List<List<String>> commands = new ArrayList<>();
+        private final List<Integer> timeouts = new ArrayList<>();
+
+        private final Mp4SubtitleMerger inner =
+            new Mp4SubtitleMerger(this, this);
+
+        FakeMerger withResult(ProcessRunner.Result result) {
+            this.canned = result;
+            return this;
+        }
+
+        FakeMerger withSideEffect(IoRunnable effect) {
+            this.sideEffect = effect;
+            return this;
+        }
+
+        int callCount() {
+            return commands.size();
+        }
+
+        List<String> lastCommand() {
+            return commands.isEmpty() ? null : commands.get(commands.size() - 1);
+        }
+
+        // ---- ProcessOps recording ----
+
+        @Override
+        public ProcessRunner.Result run(List<String> command, int timeoutSeconds) {
+            commands.add(List.copyOf(command));
+            timeouts.add(timeoutSeconds);
+            if (sideEffect != null) {
+                try {
+                    sideEffect.run();
+                } catch (IOException ioe) {
+                    throw new RuntimeException("test side-effect failed", ioe);
+                }
+            }
+            return canned;
+        }
+
+        @Override
+        public ProcessRunner.Result run(List<String> command, int timeoutSeconds,
+                                        java.util.function.Consumer<String> onLine) {
+            // Streaming variant — reuse the same recording + canned result.
+            return run(command, timeoutSeconds);
+        }
+
+        // ---- SubtitleMerger pass-through ----
+
+        @Override
+        public boolean supportsContainerExtension(String ext) {
+            return inner.supportsContainerExtension(ext);
+        }
+        @Override
+        public boolean supportsSubtitleExtension(String ext) {
+            return inner.supportsSubtitleExtension(ext);
+        }
+        @Override
+        public boolean isToolAvailable() {
+            return inner.isToolAvailable();
+        }
+        @Override
+        public String getToolName() {
+            return inner.getToolName();
+        }
+        @Override
+        public boolean alreadyHasLanguageTrack(Path mediaFile, String langCode3) {
+            return inner.alreadyHasLanguageTrack(mediaFile, langCode3);
+        }
+        @Override
+        public MergeOutcome merge(Path mediaFile, List<SubtitleEntry> subtitles,
+                                  java.util.function.IntConsumer onProgress) {
+            return inner.merge(mediaFile, subtitles, onProgress);
+        }
     }
 }

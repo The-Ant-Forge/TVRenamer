@@ -21,9 +21,9 @@ import org.tvrenamer.controller.util.StringUtils;
  *
  * <p>Detection mirrors {@code Mp4MetadataTagger}: cache once per JVM via a
  * volatile field with a double-checked-locking guard.  The actual process
- * spawn is delegated to {@link ProcessRunner}, but the call site is routed
- * through a package-private {@link RunOperation} indirection so unit tests
- * can substitute a fake without spawning real binaries.
+ * spawn is delegated to {@link ProcessRunner} via the constructor-injected
+ * {@link ProcessOps.Run} / {@link ProcessOps.Streaming} indirection so unit
+ * tests can substitute fakes without spawning real binaries.
  *
  * <p>Only {@code .srt} and {@code .vtt} subtitle inputs are accepted —
  * MP4Box rejects ASS/SSA in the MP4 box format, and the controller is
@@ -51,52 +51,26 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
     private static volatile Boolean detected = null;
     private static final Object DETECTION_LOCK = new Object();
 
-    // ---- Test indirection for ProcessRunner.run ----
+    // ---- Process indirection (constructor-injected) ----
 
-    /**
-     * Strategy for running an external process.  Production routes through
-     * {@link ProcessRunner#run(List, int)}; tests inject a fake to assert on
-     * the constructed argument list and return canned exit codes / output.
-     *
-     * <p>Package-private so tests in the same package can swap it via
-     * {@link #setRunOperation(RunOperation)} and restore it via
-     * {@link #resetRunOperation()}.
-     */
-    @FunctionalInterface
-    interface RunOperation {
-        ProcessRunner.Result run(List<String> command, int timeoutSeconds);
+    /** Per-instance process runner for tests to inject fakes via the package-private constructor. */
+    private final ProcessOps.Run runOp;
+
+    /** Per-instance streaming process runner — used during the merge for progress parsing. */
+    private final ProcessOps.Streaming streamingOp;
+
+    /** Public no-arg constructor for production: routes through {@link ProcessRunner}. */
+    public Mp4SubtitleMerger() {
+        this(ProcessOps.REAL, ProcessOps.REAL_STREAMING);
     }
 
-    /**
-     * Streaming variant — invoked during the merge so we can parse MP4Box's
-     * {@code ISO File Writing: |======| (NN/100)} progress lines and forward
-     * the percentage to the caller's progress consumer.
-     */
-    @FunctionalInterface
-    interface RunStreamingOperation {
-        ProcessRunner.Result run(
-                List<String> command,
-                int timeoutSeconds,
-                java.util.function.Consumer<String> onLine);
-    }
-
-    static final RunOperation REAL_RUN = ProcessRunner::run;
-    static final RunStreamingOperation REAL_STREAM = ProcessRunner::runStreaming;
-
-    private static volatile RunOperation runOperation = REAL_RUN;
-    private static volatile RunStreamingOperation runStreamingOperation = REAL_STREAM;
-
-    /** Replace the {@link RunOperation}; intended for tests only. */
-    static void setRunOperation(RunOperation op) {
-        if (op == null) {
-            throw new IllegalArgumentException("RunOperation must not be null");
+    /** Test constructor: package-private, accepts injected process operations. */
+    Mp4SubtitleMerger(ProcessOps.Run runOp, ProcessOps.Streaming streamingOp) {
+        if (runOp == null || streamingOp == null) {
+            throw new IllegalArgumentException("ProcessOps must not be null");
         }
-        runOperation = op;
-    }
-
-    /** Restore the default {@link ProcessRunner}-backed run; tests should call in @AfterEach. */
-    static void resetRunOperation() {
-        runOperation = REAL_RUN;
+        this.runOp = runOp;
+        this.streamingOp = streamingOp;
     }
 
     /** Reset the cached tool detection result; tests use this to force re-detection. */
@@ -108,7 +82,7 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
     }
 
     /** Force a particular detection state; tests use this to bypass the real PATH probe. */
-    static void setDetectedForTesting(String path) {
+    static void setToolPathForTesting(String path) {
         synchronized (DETECTION_LOCK) {
             if (path == null) {
                 toolPath = "";
@@ -160,7 +134,7 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
         List<String> cmd = List.of(toolPath, "-info", mediaFile.toString());
         ProcessRunner.Result result;
         try {
-            result = runOperation.run(cmd, SubtitleSwap.computeTimeoutSeconds(0L));
+            result = runOp.run(cmd, SubtitleSwap.computeTimeoutSeconds(0L));
         } catch (RuntimeException re) {
             logger.log(Level.FINE, "MP4Box -info threw for " + mediaFile, re);
             return false;
@@ -291,9 +265,9 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
         ProcessRunner.Result result;
         try {
             if (lineSink != null) {
-                result = runStreamingOperation.run(cmd, timeoutSeconds, lineSink);
+                result = streamingOp.run(cmd, timeoutSeconds, lineSink);
             } else {
-                result = runOperation.run(cmd, timeoutSeconds);
+                result = runOp.run(cmd, timeoutSeconds);
             }
         } catch (RuntimeException re) {
             logger.log(Level.WARNING, "MP4Box threw while merging " + mediaFile, re);

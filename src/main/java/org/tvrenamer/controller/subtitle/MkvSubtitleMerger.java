@@ -36,7 +36,7 @@ import java.util.function.IntConsumer;
  * pull a JSON parser onto the classpath just for this, we scan the output with a
  * regex.  See {@link #PATTERN_SUBTITLE_LANG} for the exact shape.
  */
-public class MkvSubtitleMerger implements SubtitleMerger {
+public final class MkvSubtitleMerger implements SubtitleMerger {
 
     private static final Logger logger = Logger.getLogger(MkvSubtitleMerger.class.getName());
 
@@ -48,6 +48,28 @@ public class MkvSubtitleMerger implements SubtitleMerger {
     /** Cached mkvmerge path (null = not checked yet, empty = not found). */
     private static volatile String toolPath = null;
     private static final Object DETECTION_LOCK = new Object();
+
+    // ---- Process indirection (constructor-injected) ----
+
+    /** Per-instance process runner for tests to inject fakes via the package-private constructor. */
+    private final ProcessOps.Run runOp;
+
+    /** Per-instance streaming process runner — used during the merge for progress parsing. */
+    private final ProcessOps.Streaming streamingOp;
+
+    /** Public no-arg constructor for production: routes through {@link ProcessRunner}. */
+    public MkvSubtitleMerger() {
+        this(ProcessOps.REAL, ProcessOps.REAL_STREAMING);
+    }
+
+    /** Test constructor: package-private, accepts injected process operations. */
+    MkvSubtitleMerger(ProcessOps.Run runOp, ProcessOps.Streaming streamingOp) {
+        if (runOp == null || streamingOp == null) {
+            throw new IllegalArgumentException("ProcessOps must not be null");
+        }
+        this.runOp = runOp;
+        this.streamingOp = streamingOp;
+    }
 
     /**
      * Pattern for any {@code "language": "<code>"} field inside a track block.
@@ -107,7 +129,7 @@ public class MkvSubtitleMerger implements SubtitleMerger {
 
         ProcessRunner.Result result;
         try {
-            result = runProcess(cmd, SubtitleSwap.computeTimeoutSeconds(0L));
+            result = runOp.run(cmd, SubtitleSwap.computeTimeoutSeconds(0L));
         } catch (RuntimeException re) {
             logger.log(Level.FINE, "mkvmerge --identify threw for " + mediaFile, re);
             return false;
@@ -228,8 +250,8 @@ public class MkvSubtitleMerger implements SubtitleMerger {
         // non-streaming runProcess overload — keeps test fakes that only
         // override the 2-arg version working unchanged.
         ProcessRunner.Result result = (lineSink == null)
-            ? runProcess(cmd, timeoutSeconds)
-            : runProcess(cmd, timeoutSeconds, lineSink);
+            ? runOp.run(cmd, timeoutSeconds)
+            : streamingOp.run(cmd, timeoutSeconds, lineSink);
 
         if (result == null || !result.success()) {
             int exitCode = (result == null) ? -1 : result.exitCode();
@@ -325,29 +347,6 @@ public class MkvSubtitleMerger implements SubtitleMerger {
         return cmd;
     }
 
-    /**
-     * Indirection seam for tests.  Production code calls
-     * {@link ProcessRunner#run(List, int)} directly; tests subclass this class
-     * and override the method to return canned results without spawning a real
-     * process.  Package-private so tests in the same package can override it.
-     */
-    ProcessRunner.Result runProcess(List<String> command, int timeoutSeconds) {
-        return ProcessRunner.run(command, timeoutSeconds);
-    }
-
-    /**
-     * Streaming variant of {@link #runProcess} — used during the merge to
-     * parse {@code --gui-mode} progress lines.  Tests can override either
-     * overload independently.  Defaults to delegating to
-     * {@link ProcessRunner#runStreaming}.
-     */
-    ProcessRunner.Result runProcess(
-            List<String> command,
-            int timeoutSeconds,
-            java.util.function.Consumer<String> onLine) {
-        return ProcessRunner.runStreaming(command, timeoutSeconds, onLine);
-    }
-
     // ---- Tool detection (cache once per JVM) ----
 
     /**
@@ -396,12 +395,12 @@ public class MkvSubtitleMerger implements SubtitleMerger {
      * string to simulate "tool not found"; pass any non-empty value to simulate
      * a detected install at that path.  Production code never calls this.
      */
-    static void setToolPathForTest(String path) {
+    static void setToolPathForTesting(String path) {
         toolPath = path;
     }
 
     /** Reset the detection cache so the next call re-detects.  Tests only. */
-    static void resetDetectionForTest() {
+    static void resetDetectionForTesting() {
         toolPath = null;
     }
 
