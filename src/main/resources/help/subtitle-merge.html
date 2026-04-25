@@ -21,7 +21,9 @@
         <li>Optionally enable "Delete subtitle files after successful merge" to remove the original <code>.srt</code>/<code>.ass</code>/<code>.vtt</code> after a confirmed merge + move.</li>
         <li>Save preferences.</li>
     </ol>
-    <p>Subtitle merging happens automatically when files are renamed/moved. The merge runs against the source file (typically a fast local disk) before the move, then the move proceeds normally.</p>
+    <p>Subtitle merging happens automatically when files are renamed/moved. The merge runs against the source file (typically a fast local disk) <em>before</em> the move, then the move proceeds normally — only the final merged file traverses any network share. Metadata tagging (if enabled) likewise runs locally before the move.</p>
+
+    <p>While each file is being merged, the row's status cell shows a percentage counter so you can watch progress in real time. The bottom progress bar advances continuously across the whole rename action (rename + tag + move + merge), in proportion to how many sub-operations have completed.</p>
 
     <h2>Required External Tools</h2>
 

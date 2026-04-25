@@ -37,6 +37,15 @@ The screenshot currently references the upstream wiki:
  * **Metadata tagging**: Embed TV metadata (show, season, episode, title, air date) directly into video files:
    - **MP4/M4V/MOV**: Built-in support using iTunes-style atoms (works with Plex, Kodi, Jellyfin, iTunes, VLC)
    - **MKV/WebM**: Requires [MKVToolNix](https://mkvtoolnix.download/) installed (uses mkvpropedit)
+   - Tagging runs **on the source disk before the move** — fast local I/O, no network round-trip during tag.
+ * **Subtitle merging**: Auto-mux sibling subtitle files (`.srt`, `.ass`, `.ssa`, `.vtt`) into the renamed media as soft tracks:
+   - **MP4/M4V**: Requires [MP4Box](https://gpac.io) (from GPAC) — `.srt` and `.vtt` only
+   - **MKV**: Requires [mkvmerge](https://mkvtoolnix.download/) (from MKVToolNix) — all four subtitle formats
+   - Merges **on the source disk before the move** so MP4Box/mkvmerge run locally; only the merged result traverses the network.
+   - **Idempotent** — re-running rename never adds duplicate language tracks (containers are inspected first).
+   - Pairs subtitles to media by canonical destination name, so a `.srt` with a scrambled source filename still pairs with the right episode after rename.
+   - Optional **delete-after-merge** removes the original `.srt` once embedded.
+   - Live per-row percentage during the merge; bottom progress bar advances continuously across rename → tag → move → merge.
  * **Always overwrite**: Option to overwrite existing destination files instead of creating versioned copies
  * **Duplicate cleanup**: After moving, optionally delete other video files representing the same episode (same base name or season/episode). User confirmation required before deletion.
  * **Fuzzy episode matching**: Detects files like "S01E02" vs "1x02" as the same episode for conflict detection and duplicate cleanup
