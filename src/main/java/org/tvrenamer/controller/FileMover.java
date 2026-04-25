@@ -14,9 +14,6 @@ import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.tvrenamer.controller.metadata.MetadataTaggingController;
-import org.tvrenamer.controller.subtitle.SubtitleEntry;
-import org.tvrenamer.controller.subtitle.SubtitleMergeController;
-import org.tvrenamer.controller.subtitle.SubtitlePairing;
 import org.tvrenamer.controller.util.FileUtilities;
 import org.tvrenamer.controller.util.StringUtils;
 import org.tvrenamer.model.FileEpisode;
@@ -44,9 +41,6 @@ public class FileMover implements Callable<Boolean> {
 
     // When true, skip the writability probe in call() because MoveRunner already verified this directory.
     private boolean directoryPreVerified = false;
-
-    /** Subtitle siblings discovered before the merge — used to delete them after the move succeeds. */
-    private List<Path> subtitleSiblingsAtSource = Collections.emptyList();
 
     /**
      * Constructs a FileMover to move the given episode.
@@ -365,95 +359,6 @@ public class FileMover implements Callable<Boolean> {
         }
     }
 
-    /*
-     * Subtitle pipeline ordering rationale:
-     *
-     *   captureSubtitleSiblings(src)  →  mergeSubtitlesIfEnabled(src)
-     *   →  Files.move(src, dest)       →  tagFileIfEnabled(dest)
-     *   →  deleteSubtitleSiblingsIfEnabled()
-     *
-     * The merge runs BEFORE the move so all I/O (read source + write merged
-     * temp + intra-volume swap) happens on the source disk, which is typically
-     * a fast local drive — much cheaper than rewriting a multi-GB container
-     * across a NAS/external destination link. Tagging continues to run AFTER
-     * the move, on the destination path, preserving the existing behaviour.
-     * Sibling subtitles are captured at source time but only deleted on the
-     * success path so a failed move leaves the user's only copy of the
-     * subtitle file intact for recovery.
-     */
-
-    /**
-     * Snapshot the sibling subtitle files at the source location BEFORE the
-     * merge runs.  We capture only the file paths because, after the move,
-     * we'll need to delete those originals — the merger does not touch them.
-     *
-     * @param sourceFile the media file at its current source location
-     */
-    private void captureSubtitleSiblings(final Path sourceFile) {
-        if (!userPrefs.isMergeSubtitles() || !userPrefs.isDeleteSubtitlesAfterMerge()) {
-            return;
-        }
-        try {
-            List<SubtitleEntry> entries = SubtitlePairing.findFor(
-                sourceFile, userPrefs.getDefaultSubtitleLanguage());
-            // Snapshot the file paths only — we don't need the rest of the entry after the merge.
-            List<Path> snapshot = new ArrayList<>(entries.size());
-            for (SubtitleEntry e : entries) {
-                snapshot.add(e.file());
-            }
-            subtitleSiblingsAtSource = snapshot;
-        } catch (Exception e) {
-            logger.log(Level.FINE, "Could not enumerate subtitle siblings for " + sourceFile, e);
-            subtitleSiblingsAtSource = Collections.emptyList();
-        }
-    }
-
-    /**
-     * Merge sibling subtitle files into the source media if the preference
-     * is enabled.  Runs BEFORE the move so I/O happens on the source disk
-     * (typically faster than the destination disk).  Failures are logged but
-     * never abort the surrounding move.
-     *
-     * @param sourceFile the media file at its current source location
-     */
-    private void mergeSubtitlesIfEnabled(final Path sourceFile) {
-        if (!userPrefs.isMergeSubtitles()) {
-            return;
-        }
-        try {
-            SubtitleMergeController controller = new SubtitleMergeController();
-            SubtitleMergeController.Result result = controller.mergeIfEnabled(sourceFile, episode);
-            if (result == SubtitleMergeController.Result.FAILED) {
-                logger.warning("Subtitle merge failed for " + sourceFile + "; continuing with move.");
-            }
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "Exception during subtitle merge for: " + sourceFile, e);
-        }
-    }
-
-    /**
-     * Delete the sibling subtitle files captured at source time, but ONLY after
-     * the move has been confirmed successful.  Called only on success paths;
-     * if the move failed, the subtitles remain in place as a recovery path.
-     */
-    private void deleteSubtitleSiblingsIfEnabled() {
-        if (!userPrefs.isMergeSubtitles() || !userPrefs.isDeleteSubtitlesAfterMerge()) {
-            return;
-        }
-        if (subtitleSiblingsAtSource.isEmpty()) {
-            return;
-        }
-        for (Path sub : subtitleSiblingsAtSource) {
-            try {
-                if (Files.deleteIfExists(sub)) {
-                    logger.fine("Deleted merged subtitle: " + sub);
-                }
-            } catch (IOException ioe) {
-                logger.log(Level.WARNING, "Could not delete merged subtitle: " + sub, ioe);
-            }
-        }
-    }
-
     /**
      * Execute the file move action.  This method assumes that all sanity checks have been
      * completed and that everything is ready to go: source file and destination directory
@@ -488,12 +393,6 @@ public class FileMover implements Callable<Boolean> {
 
         // Record whether this move will require copy+delete (used for overall progress reporting).
         willUseCopyAndDelete = !tryRename;
-
-        // Subtitle pipeline (see comment above mergeSubtitlesIfEnabled): capture
-        // the sibling list and merge BEFORE the move so the I/O lands on the
-        // source disk. Sibling deletion happens only after the move succeeds.
-        captureSubtitleSiblings(srcPath);
-        mergeSubtitlesIfEnabled(srcPath);
 
         if (tryRename) {
             boolean overwrite = userPrefs.isAlwaysOverwriteDestination();
@@ -531,13 +430,6 @@ public class FileMover implements Callable<Boolean> {
 
         episode.setPath(destPath);
         finishMove(destPath, originalMtime);
-
-        // Sibling subtitle deletion is the final step of a successful move.
-        // Skip it if finishMove flagged a failure (e.g. mtime restoration
-        // problem) so the originals remain available for recovery.
-        if (episode.isSuccess()) {
-            deleteSubtitleSiblingsIfEnabled();
-        }
     }
 
     /**
@@ -666,13 +558,10 @@ public class FileMover implements Callable<Boolean> {
             if (destPath.equals(realSrc)) {
                 logger.info("nothing to be done to " + srcPath);
                 episode.setAlreadyInPlace();
-                // Still merge subtitles + tag metadata even if file is already correctly named.
-                // No physical move happens, but the merge still operates on the file in place
-                // and the captured siblings can be cleaned up immediately afterward.
-                captureSubtitleSiblings(realSrc);
-                mergeSubtitlesIfEnabled(realSrc);
+                // Still tag metadata even if file is already correctly named.
+                // Subtitle merging is handled post-batch by MoveRunner once all
+                // siblings (media + subtitles) have been canonicalised.
                 tagFileIfEnabled(realSrc);
-                deleteSubtitleSiblingsIfEnabled();
                 return;
             }
             // If overwrite is enabled, allow the move to proceed; doActualMove will handle replacement.

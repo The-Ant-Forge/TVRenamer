@@ -23,6 +23,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.tvrenamer.controller.subtitle.SubtitleEntry;
+import org.tvrenamer.controller.subtitle.SubtitleMergeController;
+import org.tvrenamer.controller.subtitle.SubtitlePairing;
 import org.tvrenamer.controller.util.FileUtilities;
 import org.tvrenamer.controller.util.StringUtils;
 import org.tvrenamer.model.ProgressUpdater;
@@ -75,6 +78,11 @@ public class MoveRunner implements Runnable {
                 }
 
                 if (remaining == 0) {
+                    // Run subtitle merging now that every move (media + subtitle
+                    // siblings alike) has been canonicalised.  Pairing scans the
+                    // destination directories so a renamed .srt aligns with its
+                    // renamed media by base name.
+                    runPostBatchSubtitleMerge();
                     // Aggregate duplicates found by all movers before finishing.
                     aggregateDuplicates();
                     if (updater != null) {
@@ -546,6 +554,105 @@ public class MoveRunner implements Runnable {
         if (!aggregatedDuplicates.isEmpty()) {
             logger.info("Aggregated " + aggregatedDuplicates.size() +
                 " duplicate video file(s) for review");
+        }
+    }
+
+    /**
+     * Post-batch subtitle merging.
+     *
+     * <p>Runs once after every {@link FileMover} in the batch has finished.
+     * This is deliberately AFTER the moves rather than per-file beforehand —
+     * TVRenamer renames any file whose name parses as an episode (including
+     * subtitle files), so by the time the batch finishes, both media and
+     * subtitle files share a canonical base name in their destination
+     * directory.  Pairing then becomes a trivial same-directory base-name
+     * match handled by {@link SubtitlePairing#findFor}.
+     *
+     * <p>Each successfully moved file contributes its destination directory
+     * to a deduplicated set; for every directory we walk regular files and
+     * ask {@link SubtitleMergeController#mergeIfEnabled} to handle each one.
+     * The controller short-circuits unsupported extensions (the .srt files
+     * themselves, anything that isn't a media container) and silently skips
+     * media files with no paired subtitles, so this is cheap to run
+     * unconditionally.
+     *
+     * <p>If the user enabled "delete subtitle files after successful merge",
+     * deletion happens here, after the merge has been confirmed successful
+     * and the merge target is the destination file (the original sibling
+     * subtitle has already moved into place by this point).
+     */
+    private void runPostBatchSubtitleMerge() {
+        UserPreferences prefs = UserPreferences.getInstance();
+        if (!prefs.isMergeSubtitles()) {
+            return;
+        }
+
+        Set<Path> destDirs = new HashSet<>();
+        for (FileMover mover : movers) {
+            Path dest = mover.getActualDestinationIfSuccess();
+            if (dest != null) {
+                Path parent = dest.getParent();
+                if (parent != null) {
+                    destDirs.add(parent);
+                }
+            }
+        }
+        if (destDirs.isEmpty()) {
+            return;
+        }
+
+        SubtitleMergeController controller = new SubtitleMergeController();
+        for (Path dir : destDirs) {
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+                for (Path entry : stream) {
+                    if (!Files.isRegularFile(entry)) {
+                        continue;
+                    }
+                    SubtitleMergeController.Result result;
+                    try {
+                        result = controller.mergeIfEnabled(entry, null);
+                    } catch (RuntimeException re) {
+                        logger.log(Level.WARNING,
+                            "Exception during subtitle merge for: " + entry, re);
+                        continue;
+                    }
+                    if (result == SubtitleMergeController.Result.SUCCESS
+                            && prefs.isDeleteSubtitlesAfterMerge()) {
+                        deleteSubtitleSiblings(entry, prefs);
+                    }
+                }
+            } catch (IOException ioe) {
+                logger.log(Level.WARNING,
+                    "Could not scan destination directory for subtitle merge: " + dir, ioe);
+            }
+        }
+    }
+
+    /**
+     * Delete sibling subtitle files of the given (now-merged) media file.
+     *
+     * <p>Pairing logic is the same as the merger uses, so we delete exactly
+     * the files that contributed tracks to the merged container.  Failures
+     * are logged but do not propagate.
+     */
+    private static void deleteSubtitleSiblings(Path mergedMedia, UserPreferences prefs) {
+        List<SubtitleEntry> siblings;
+        try {
+            siblings = SubtitlePairing.findFor(mergedMedia, prefs.getDefaultSubtitleLanguage());
+        } catch (RuntimeException re) {
+            logger.log(Level.WARNING,
+                "Could not enumerate subtitle siblings for " + mergedMedia, re);
+            return;
+        }
+        for (SubtitleEntry entry : siblings) {
+            try {
+                if (Files.deleteIfExists(entry.file())) {
+                    logger.fine("Deleted merged subtitle: " + entry.file());
+                }
+            } catch (IOException ioe) {
+                logger.log(Level.WARNING,
+                    "Could not delete merged subtitle: " + entry.file(), ioe);
+            }
         }
     }
 
