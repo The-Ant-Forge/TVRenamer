@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 import org.tvrenamer.controller.util.ExternalToolDetector;
 import org.tvrenamer.controller.util.ProcessRunner;
@@ -155,15 +156,52 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
             return false;
         }
 
-        String output = result.output();
-        if (output == null || output.isEmpty()) {
+        return infoHasSubtitleLanguage(result.output(), langCode3);
+    }
+
+    /**
+     * Scan {@code MP4Box -info} output for a subtitle track in the given language.
+     *
+     * <p>MP4Box output places per-track fields on consecutive lines under a
+     * {@code # Track N Info ...} header.  A track that's a subtitle stream is
+     * marked by {@code Media Type: text:<codec>} (e.g. {@code text:tx3g} or
+     * {@code text:wvtt}) or by older wording like {@code Subtitle in language}.
+     * The language appears on its own line as {@code Media Language: <name> (<code>)}
+     * <em>or</em> embedded in the {@code Media Type} line for older versions.
+     *
+     * <p>We split the output into per-track blocks at each {@code # Track }
+     * boundary and check, for each block, whether it looks like a subtitle
+     * stream <em>and</em> contains the requested language code anywhere in the
+     * block.  This handles both modern and legacy MP4Box wording without
+     * having to enumerate every variant.
+     */
+    static boolean infoHasSubtitleLanguage(String output, String langCode3) {
+        if (output == null || output.isEmpty() || langCode3 == null) {
             return false;
         }
-
         String wantedLang = langCode3.toLowerCase(Locale.ROOT);
-        for (String rawLine : output.split("\\r?\\n")) {
-            String lower = rawLine.toLowerCase(Locale.ROOT);
-            if (lower.contains("subtitle") && lower.contains(wantedLang)) {
+
+        // Split into per-track blocks.  The first chunk is the file/movie
+        // prelude (no "# Track " header) which we skip.
+        String[] blocks = output.split("(?m)^# Track\\b");
+        for (int i = 1; i < blocks.length; i++) {
+            String lower = blocks[i].toLowerCase(Locale.ROOT);
+            boolean isSubtitleTrack =
+                lower.contains("media type: text:")
+                || lower.contains("media type:text:")
+                || lower.contains("subtitle in language")
+                || lower.contains("subtitle stream")
+                || lower.contains("unknown text stream");
+            if (!isSubtitleTrack) {
+                continue;
+            }
+            // Look for the language code as a whole word anywhere in the block,
+            // since Media Language is on a separate line from the type indicator.
+            // Use a word-boundary check so "eng" doesn't match inside "english"
+            // — except MP4Box does emit "English (eng)" so we must accept either
+            // the parenthesised form or a standalone token.
+            if (lower.matches("(?s).*\\b" + Pattern.quote(wantedLang) + "\\b.*")
+                || lower.contains("(" + wantedLang + ")")) {
                 return true;
             }
         }

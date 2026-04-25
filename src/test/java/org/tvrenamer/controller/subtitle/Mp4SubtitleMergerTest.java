@@ -220,20 +220,41 @@ class Mp4SubtitleMergerTest {
 
     // ---------- alreadyHasLanguageTrack ----------
 
+    /**
+     * Realistic MP4Box -info output — captured from GPAC 2.2.1 against a file
+     * with video, audio, and a TX3G subtitle track.  Each track block starts
+     * with a {@code # Track N Info} header line; per-track fields appear on
+     * subsequent lines under the header.
+     */
+    private static final String REAL_MP4BOX_OUTPUT_WITH_SUBTITLE = """
+            # Movie Info - 3 tracks - TimeScale 600
+            \tmedia: 10
+            # Track 1 Info - ID 1 - TimeScale 24000
+            Media Duration 01:28:34.726
+            Track flags: Enabled In Movie
+            Visual Track layout: x=0 y=0 width=1920 height=1080
+            Media Type: vide:hev1
+            # Track 2 Info - ID 2 - TimeScale 48000
+            Media Duration 01:28:34.794
+            Track flags: Enabled In Movie
+            Media Language: English (eng)
+            Media Type: soun:mp4a
+            # Track 3 Info - ID 3 - TimeScale 1000
+            Media Duration 01:27:32.334
+            Track flags: Enabled In Movie In Preview
+            Media Language: English (eng)
+            Media Samples: 2877
+            Media Type: text:tx3g
+            \tUnknown Text Stream
+            \tSize 1920 x 1080 - Translation X=0 Y=0 - Layer 0
+            """;
+
     @Test
     void alreadyHasLanguageTrack_subtTx3gWithEng_returnsTrueForEng(@TempDir Path dir)
             throws IOException {
         Path media = Files.createFile(dir.resolve("Solar Drift.mp4"));
-        String info = """
-            Track # 1 Info - TrackID 1 - TimeScale 30000
-            Media Type "vide:avc1" - 1920x1080
-            Track # 3 Info - TrackID 3 - TimeScale 1000
-            Media Type "subt:tx3g" - Subtitle in language: eng
-            Track # 4 Info - TrackID 4 - TimeScale 90000
-            Media Type "soun:mp4a"
-            """;
         Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(true, 0, info));
+            new ProcessRunner.Result(true, 0, REAL_MP4BOX_OUTPUT_WITH_SUBTITLE));
 
         assertTrue(merger.alreadyHasLanguageTrack(media, "eng"));
     }
@@ -242,14 +263,8 @@ class Mp4SubtitleMergerTest {
     void alreadyHasLanguageTrack_onlyEngPresent_returnsFalseForFre(@TempDir Path dir)
             throws IOException {
         Path media = Files.createFile(dir.resolve("Solar Drift.mp4"));
-        String info = """
-            Track # 1 Info - TrackID 1 - TimeScale 30000
-            Media Type "vide:avc1" - 1920x1080
-            Track # 3 Info - TrackID 3 - TimeScale 1000
-            Media Type "subt:tx3g" - Subtitle in language: eng
-            """;
         Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
-            new ProcessRunner.Result(true, 0, info));
+            new ProcessRunner.Result(true, 0, REAL_MP4BOX_OUTPUT_WITH_SUBTITLE));
 
         assertFalse(merger.alreadyHasLanguageTrack(media, "fre"));
     }
@@ -258,11 +273,14 @@ class Mp4SubtitleMergerTest {
     void alreadyHasLanguageTrack_onlyVideoAndAudio_returnsFalse(@TempDir Path dir)
             throws IOException {
         Path media = Files.createFile(dir.resolve("Solar Drift.mp4"));
+        // Same shape as the realistic output, but with the subtitle track removed.
         String info = """
-            Track # 1 Info - TrackID 1 - TimeScale 30000
-            Media Type "vide:avc1" - 1920x1080
-            Track # 2 Info - TrackID 2 - TimeScale 90000
-            Media Type "soun:mp4a"
+            # Movie Info - 2 tracks - TimeScale 600
+            # Track 1 Info - ID 1 - TimeScale 24000
+            Media Type: vide:hev1
+            # Track 2 Info - ID 2 - TimeScale 48000
+            Media Language: English (eng)
+            Media Type: soun:mp4a
             """;
         Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
             new ProcessRunner.Result(true, 0, info));
@@ -291,11 +309,18 @@ class Mp4SubtitleMergerTest {
     }
 
     @Test
-    void alreadyHasLanguageTrack_alternativeWording_stillMatches(@TempDir Path dir)
+    void alreadyHasLanguageTrack_legacyWording_stillMatches(@TempDir Path dir)
             throws IOException {
         Path media = Files.createFile(dir.resolve("Solar Drift.mp4"));
-        // A hypothetical future MP4Box wording: still contains "Subtitle" and "eng".
-        String info = "Track 3: Type subtitle, lang=eng, codec tx3g\n";
+        // Older GPAC versions emitted "Subtitle in language: <code>" in the Media Type line
+        // rather than the modern "Media Type: text:<codec>" plus separate "Media Language" line.
+        String info = """
+            # Movie Info - 2 tracks
+            # Track 1 Info - ID 1 - TimeScale 24000
+            Media Type: vide:avc1
+            # Track 2 Info - ID 2 - TimeScale 1000
+            Media Type: subt:tx3g - Subtitle in language: eng
+            """;
         Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
             new ProcessRunner.Result(true, 0, info));
 
@@ -306,8 +331,12 @@ class Mp4SubtitleMergerTest {
     void alreadyHasLanguageTrack_caseInsensitiveLanguageMatch(@TempDir Path dir)
             throws IOException {
         Path media = Files.createFile(dir.resolve("Solar Drift.mp4"));
-        // MP4Box uses upper-case language code, query uses lower-case.
-        String info = "Subtitle track in language: ENG\n";
+        // Upper-case language code in the output, lower-case query.
+        String info = """
+            # Track 1 Info - ID 1
+            Media Type: text:tx3g
+            Media Language: English (ENG)
+            """;
         Mp4SubtitleMerger.setRunOperation((cmd, timeout) ->
             new ProcessRunner.Result(true, 0, info));
 

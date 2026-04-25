@@ -48,19 +48,16 @@ public class MkvSubtitleMerger implements SubtitleMerger {
     private static final Object DETECTION_LOCK = new Object();
 
     /**
-     * Match a subtitle track entry in the mkvmerge --identify JSON output and
-     * extract its language.  The output is single-line JSON in practice but we
-     * enable DOTALL anyway so newlines (if any tool ever inserts them) don't
-     * break the match.  The pattern is non-greedy on {@code .*?} so adjacent
-     * tracks don't bleed together.
-     *
-     * <p>JSON shape:
-     * {@code {"id":2,"type":"subtitles","properties":{"language":"eng",...},...}}
+     * Pattern for any {@code "language": "<code>"} field inside a track block.
+     * The {@code [a-zA-Z]{2,3}} group accepts 2-letter (ietf) or 3-letter
+     * (ISO 639-2) codes; mkvmerge emits both styles depending on the source.
      */
-    private static final Pattern PATTERN_SUBTITLE_LANG = Pattern.compile(
-        "\"type\"\\s*:\\s*\"subtitles\""
-            + ".*?\"properties\"\\s*:\\s*\\{[^}]*?\"language\"\\s*:\\s*\"([a-zA-Z]{2,3})\"",
-        Pattern.DOTALL);
+    private static final Pattern PATTERN_LANGUAGE_FIELD = Pattern.compile(
+        "\"language(?:_ietf)?\"\\s*:\\s*\"([a-zA-Z]{2,3})\"");
+
+    /** Pattern for the track-type field set to subtitles. */
+    private static final Pattern PATTERN_TYPE_SUBTITLES = Pattern.compile(
+        "\"type\"\\s*:\\s*\"subtitles\"");
 
     @Override
     public boolean supportsContainerExtension(String containerExtension) {
@@ -132,16 +129,39 @@ public class MkvSubtitleMerger implements SubtitleMerger {
     /**
      * Scan the (assumed JSON) {@code output} for any subtitle track whose
      * {@code properties.language} equals {@code langCode3} (case-insensitive).
+     *
+     * <p>The mkvmerge JSON emits each track as an object with {@code "id"},
+     * {@code "properties"}, and {@code "type"} fields, and the field order is
+     * <em>not</em> guaranteed across versions: the actual mkvmerge 98+ output we
+     * observed places {@code "properties"} (containing {@code "language"})
+     * <em>before</em> {@code "type"}, so a regex anchored on {@code "type"} and
+     * scanning forward for {@code "language"} matches the next track's language
+     * instead of the current track's.  Splitting on {@code "id":} is robust to
+     * field-ordering changes: each chunk represents exactly one track, and we
+     * check whether any chunk contains both {@code "type":"subtitles"} and a
+     * matching language field (either {@code language} or {@code language_ietf}).
      */
     static boolean jsonHasSubtitleLanguage(String output, String langCode3) {
-        if (output == null || output.isEmpty()) {
+        if (output == null || output.isEmpty() || langCode3 == null) {
             return false;
         }
-        Matcher m = PATTERN_SUBTITLE_LANG.matcher(output);
-        while (m.find()) {
-            String lang = m.group(1);
-            if (lang != null && lang.equalsIgnoreCase(langCode3)) {
-                return true;
+        // Each track entry contains exactly one "id":N, so splitting on it
+        // gives us one element per track (plus a leading prelude with file/container info).
+        String[] chunks = output.split("\"id\"\\s*:");
+        for (String chunk : chunks) {
+            // Must be a subtitles track (exact "type":"subtitles" match,
+            // not just any occurrence of the substring "subtitles").
+            if (!PATTERN_TYPE_SUBTITLES.matcher(chunk).find()) {
+                continue;
+            }
+            // Either language or language_ietf must match.  Both fields use
+            // 2- or 3-letter alpha codes so a single regex covers both.
+            Matcher m = PATTERN_LANGUAGE_FIELD.matcher(chunk);
+            while (m.find()) {
+                String lang = m.group(1);
+                if (lang != null && lang.equalsIgnoreCase(langCode3)) {
+                    return true;
+                }
             }
         }
         return false;

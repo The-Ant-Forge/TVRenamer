@@ -18,13 +18,22 @@ public final class ExternalToolDetector {
     }
 
     /**
-     * Check if an executable is available in PATH by running {@code name --version}.
+     * Check if an executable is available in PATH by probing it with a version flag.
+     *
+     * <p>Most tools accept {@code --version} (double-dash) and exit 0.  GPAC tools
+     * such as {@code MP4Box} use {@code -version} (single-dash, Unix tradition) and
+     * return non-zero on {@code --version}.  We try double-dash first and fall back
+     * to single-dash on failure so both conventions are handled without callers
+     * having to know which a given tool prefers.
      *
      * @param executable the executable name to probe
-     * @return true if it runs successfully within 5 seconds
+     * @return true if either probe succeeds within 5 seconds
      */
     public static boolean isExecutableInPath(String executable) {
-        return ProcessRunner.run(List.of(executable, "--version"), 5).success();
+        if (ProcessRunner.run(List.of(executable, "--version"), 5).success()) {
+            return true;
+        }
+        return ProcessRunner.run(List.of(executable, "-version"), 5).success();
     }
 
     /**
