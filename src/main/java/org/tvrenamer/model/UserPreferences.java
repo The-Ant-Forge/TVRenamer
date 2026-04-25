@@ -70,6 +70,19 @@ public class UserPreferences {
     // to supported video files (MP4/M4V).
     private boolean tagVideoMetadata = false;
 
+    // If true, before moving the source media, merge sibling subtitle files into the
+    // renamed media file (MKV/MP4/M4V).
+    private boolean mergeSubtitles = false;
+
+    // Default subtitle language code (3-letter ISO 639-2 B-form) used when a subtitle
+    // filename has no language tag. Values are restricted to entries in the dropdown;
+    // unknown/invalid values fall back to "eng" silently on read.
+    private String defaultSubtitleLanguage = "eng";
+
+    // If true, after a successful merge AND a successful move, delete the sibling
+    // subtitle files. Default false (safe behaviour).
+    private boolean deleteSubtitlesAfterMerge = false;
+
     // Fun metric: count of files successfully processed (renamed and/or moved).
     // Persisted in prefs.xml. This should only be incremented once per successfully
     // processed TableItem to avoid double-counting rename+move operations.
@@ -257,7 +270,42 @@ public class UserPreferences {
 
         val = scalars.get("tagVideoMetadata");
         if (val != null) {
-            p.tagVideoMetadata = Boolean.parseBoolean(val);
+            try {
+                p.tagVideoMetadata = Boolean.parseBoolean(val);
+            } catch (Exception ignored) {
+                // keep default
+            }
+        }
+
+        val = scalars.get("mergeSubtitles");
+        if (val != null) {
+            try {
+                p.mergeSubtitles = Boolean.parseBoolean(val);
+            } catch (Exception ignored) {
+                // keep default
+            }
+        }
+
+        val = scalars.get("defaultSubtitleLanguage");
+        if (val != null) {
+            String trimmed = val.trim().toLowerCase(java.util.Locale.ROOT);
+            if (isValidSubtitleLanguageFormat(trimmed)) {
+                p.defaultSubtitleLanguage = trimmed;
+            } else {
+                // Forward-compat: silently substitute the default for unknown
+                // or malformed values. We only validate format here; semantic
+                // membership in SubtitleLanguages.ALL is enforced by callers.
+                p.defaultSubtitleLanguage = "eng";
+            }
+        }
+
+        val = scalars.get("deleteSubtitlesAfterMerge");
+        if (val != null) {
+            try {
+                p.deleteSubtitlesAfterMerge = Boolean.parseBoolean(val);
+            } catch (Exception ignored) {
+                // keep default
+            }
         }
 
         val = scalars.get("processedFileCount");
@@ -507,6 +555,92 @@ public class UserPreferences {
             this.tagVideoMetadata = tag;
             preferenceChanged(UserPreference.TAG_VIDEO_METADATA);
         }
+    }
+
+    /**
+     * @return true if sibling subtitle files should be merged into the renamed media
+     *         file before the move.
+     */
+    public boolean isMergeSubtitles() {
+        return mergeSubtitles;
+    }
+
+    /**
+     * @param merge true to enable subtitle merging, false to disable
+     */
+    public void setMergeSubtitles(boolean merge) {
+        if (valuesAreDifferent(this.mergeSubtitles, merge)) {
+            this.mergeSubtitles = merge;
+            preferenceChanged(UserPreference.MERGE_SUBTITLES);
+        }
+    }
+
+    /**
+     * @return the user's default subtitle language as a 3-letter ISO 639-2 B-form
+     *         code (e.g. "eng"). Used when a subtitle filename carries no language tag.
+     */
+    public String getDefaultSubtitleLanguage() {
+        return defaultSubtitleLanguage;
+    }
+
+    /**
+     * Set the default subtitle language. Null, blank or malformed values are
+     * silently coerced to "eng" so callers can rely on a valid 3-letter code.
+     *
+     * @param code the language code (3-letter ISO 639-2 B-form, e.g. "eng")
+     */
+    public void setDefaultSubtitleLanguage(String code) {
+        String resolved = "eng";
+        if (code != null) {
+            String trimmed = code.trim().toLowerCase(java.util.Locale.ROOT);
+            if (isValidSubtitleLanguageFormat(trimmed)) {
+                resolved = trimmed;
+            }
+        }
+        if (valuesAreDifferent(this.defaultSubtitleLanguage, resolved)) {
+            this.defaultSubtitleLanguage = resolved;
+            preferenceChanged(UserPreference.DEFAULT_SUBTITLE_LANGUAGE);
+        }
+    }
+
+    /**
+     * @return true if sibling subtitle files should be deleted after a successful
+     *         merge AND a successful move.
+     */
+    public boolean isDeleteSubtitlesAfterMerge() {
+        return deleteSubtitlesAfterMerge;
+    }
+
+    /**
+     * @param delete true to delete sibling subtitle files post-merge/post-move
+     */
+    public void setDeleteSubtitlesAfterMerge(boolean delete) {
+        if (valuesAreDifferent(this.deleteSubtitlesAfterMerge, delete)) {
+            this.deleteSubtitlesAfterMerge = delete;
+            preferenceChanged(UserPreference.DELETE_SUBTITLES_AFTER_MERGE);
+        }
+    }
+
+    /**
+     * Validate the *format* of a subtitle language code: exactly three ASCII letters.
+     * This is a forward-compatibility gate at the persistence layer; semantic
+     * validation against the curated dropdown list (SubtitleLanguages.ALL) is the
+     * responsibility of callers that know about that list.
+     *
+     * @param code candidate code (already trimmed/lowercased)
+     * @return true if the code is a 3-letter alphabetic string
+     */
+    private static boolean isValidSubtitleLanguageFormat(String code) {
+        if (code == null || code.length() != 3) {
+            return false;
+        }
+        for (int i = 0; i < 3; i++) {
+            char c = code.charAt(i);
+            if (c < 'a' || c > 'z') {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -1107,6 +1241,12 @@ public class UserPreferences {
             cleanupDuplicateVideoFiles +
             ",\n  tagVideoMetadata=" +
             tagVideoMetadata +
+            ",\n  mergeSubtitles=" +
+            mergeSubtitles +
+            ",\n  defaultSubtitleLanguage=" +
+            defaultSubtitleLanguage +
+            ",\n  deleteSubtitlesAfterMerge=" +
+            deleteSubtitlesAfterMerge +
             ",\n  deleteRowAfterMove=" +
             deleteRowAfterMove +
             ",\n  setRecursivelyAddFolders=" +

@@ -46,6 +46,9 @@ public class UserPreferencesPersistence {
         "alwaysOverwriteDestination",
         "cleanupDuplicateVideoFiles",
         "tagVideoMetadata",
+        "mergeSubtitles",
+        "defaultSubtitleLanguage",
+        "deleteSubtitlesAfterMerge",
         "processedFileCount",
     };
 
@@ -76,6 +79,9 @@ public class UserPreferencesPersistence {
         appendElement(xml, "alwaysOverwriteDestination", prefs.isAlwaysOverwriteDestination());
         appendElement(xml, "cleanupDuplicateVideoFiles", prefs.isCleanupDuplicateVideoFiles());
         appendElement(xml, "tagVideoMetadata", prefs.isTagVideoMetadata());
+        appendElement(xml, "mergeSubtitles", prefs.isMergeSubtitles());
+        appendElement(xml, "defaultSubtitleLanguage", prefs.getDefaultSubtitleLanguage());
+        appendElement(xml, "deleteSubtitlesAfterMerge", prefs.isDeleteSubtitlesAfterMerge());
         appendElement(xml, "processedFileCount", prefs.getProcessedFileCount());
 
         // ignoreKeywords list

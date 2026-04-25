@@ -28,6 +28,15 @@ public enum UserPreference {
     // Tag video files with TV metadata (show, season, episode, title) after move.
     TAG_VIDEO_METADATA,
 
+    // Merge sibling subtitle files into renamed media files.
+    MERGE_SUBTITLES,
+
+    // Default 3-letter ISO 639-2 B-form language code used when a subtitle filename has no tag.
+    DEFAULT_SUBTITLE_LANGUAGE,
+
+    // Delete sibling subtitle files after a successful merge + move.
+    DELETE_SUBTITLES_AFTER_MERGE,
+
     // Since these are only meaningful at startup, they probably should not be watched
     UPDATE_CHECK,
     @SuppressWarnings("unused")
