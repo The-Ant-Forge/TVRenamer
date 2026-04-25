@@ -42,6 +42,9 @@ import org.eclipse.swt.widgets.TableColumn;
 import org.eclipse.swt.widgets.TableItem;
 import org.eclipse.swt.widgets.Text;
 import org.tvrenamer.controller.TheTVDBProvider;
+import org.tvrenamer.controller.subtitle.SubtitleLanguages;
+import org.tvrenamer.controller.subtitle.SubtitleLanguages.Language;
+import org.tvrenamer.controller.subtitle.SubtitleMergeController;
 import org.tvrenamer.controller.util.FileUtilities;
 import org.tvrenamer.controller.util.StringUtils;
 import org.tvrenamer.model.ReplacementToken;
@@ -223,6 +226,16 @@ class PreferencesDialog extends Dialog {
     private Button overwriteDestinationCheckbox;
     private Button cleanupDuplicatesCheckbox;
     private Button tagVideoMetadataCheckbox;
+
+    // Subtitle merge controls (see "Subtitles" section in the General tab).
+    private Button mergeSubtitlesCheckbox;
+    private Combo subtitleLanguageCombo;
+    private Button deleteSubtitlesAfterMergeCheckbox;
+
+    // One-shot session flag: only show the "no merge tools detected" warning
+    // dialog once per Preferences-dialog instance, no matter how many times
+    // the user toggles the merge-subtitles checkbox.
+    private boolean subtitleNoToolWarningShown = false;
 
     // If checked, set moved/renamed files' modification time to "now".
     // If unchecked (default), preserve original modification time.
@@ -698,6 +711,68 @@ class PreferencesDialog extends Dialog {
             GridData.BEGINNING,
             3
         );
+
+        // --- Subtitles section -------------------------------------------------
+        // Mirrors the "Tag video metadata" idiom above: a master checkbox spanning
+        // the full row, followed by indented children, ending with a status label.
+        // The General tab is a 3-column GridLayout, so we use span=3 for the
+        // master checkbox and the status label, and label+combo+spacer for the
+        // language row.
+        mergeSubtitlesCheckbox = createCheckbox(
+            "Merge sibling subtitle files into renamed media",
+            "When renaming/moving a media file, locate any sibling subtitle file with the matching base name and merge it into the media container as a soft subtitle track. Requires MP4Box (GPAC) for MP4/M4V and mkvmerge (MKVToolNix) for MKV.",
+            prefs.isMergeSubtitles(),
+            generalGroup,
+            GridData.BEGINNING,
+            3
+        );
+
+        // Language label + read-only combo. We don't push extra GridData
+        // settings beyond what the existing controls do; horizontalIndent
+        // gives a small visual indent under the master checkbox without
+        // introducing a new layout system.
+        Label subtitleLanguageLabel = new Label(generalGroup, SWT.NONE);
+        subtitleLanguageLabel.setText("Default language");
+        subtitleLanguageLabel.setToolTipText(
+            "Language used for subtitle files whose filename has no language tag.");
+        GridData subtitleLanguageLabelData =
+            new GridData(SWT.BEGINNING, SWT.CENTER, false, false, 1, 1);
+        subtitleLanguageLabelData.horizontalIndent = 16;
+        subtitleLanguageLabel.setLayoutData(subtitleLanguageLabelData);
+
+        subtitleLanguageCombo = new Combo(generalGroup, SWT.DROP_DOWN | SWT.READ_ONLY);
+        subtitleLanguageCombo.setLayoutData(
+            new GridData(SWT.FILL, SWT.CENTER, true, false, 2, 1)
+        );
+        subtitleLanguageCombo.setToolTipText(
+            "Language used for subtitle files whose filename has no language tag.");
+        for (Language lang : SubtitleLanguages.ALL) {
+            subtitleLanguageCombo.add(lang.displayName());
+        }
+
+        deleteSubtitlesAfterMergeCheckbox = createCheckbox(
+            "Delete subtitle files after successful merge",
+            "Once a subtitle file has been merged into the media container and the rename has succeeded, delete the original sibling subtitle file.",
+            prefs.isDeleteSubtitlesAfterMerge(),
+            generalGroup,
+            GridData.BEGINNING,
+            3
+        );
+        // Indent the delete-subtitles checkbox under the master checkbox.
+        if (deleteSubtitlesAfterMergeCheckbox.getLayoutData() instanceof GridData dgd) {
+            dgd.horizontalIndent = 16;
+        }
+
+        // Tool-detection status label (populated once on dialog open — no live
+        // refresh needed because tool availability is cached per-JVM).
+        Label subtitleToolStatusLabel = new Label(generalGroup, SWT.NONE);
+        GridData subtitleToolStatusLabelData =
+            new GridData(SWT.BEGINNING, SWT.CENTER, true, false, 3, 1);
+        subtitleToolStatusLabelData.horizontalIndent = 16;
+        subtitleToolStatusLabel.setLayoutData(subtitleToolStatusLabelData);
+        subtitleToolStatusLabel.setText(new SubtitleMergeController().getToolSummary());
+        // --- end Subtitles section --------------------------------------------
+
         checkForUpdatesCheckbox = createCheckbox(
             CHECK_UPDATES_TEXT,
             CHECK_UPDATES_TOOLTIP,
@@ -780,6 +855,72 @@ class PreferencesDialog extends Dialog {
         } else if (themeModeCombo.getItemCount() > 0) {
             themeModeCombo.select(0);
         }
+
+        initializeSubtitleControls();
+    }
+
+    /**
+     * Wire the Subtitles section: pick the saved language in the combo, set
+     * the initial enabled state of the indented children based on the master
+     * checkbox, and install a live listener that toggles their enabled state
+     * (and shows a one-shot warning when the user enables the merge feature
+     * with no merge tools detected on PATH).
+     */
+    private void initializeSubtitleControls() {
+        // Resolve the saved language code to a dropdown index. Falls back to
+        // English (index 0) if the saved value isn't in the catalogue — this
+        // is the spec's "forward compatibility" behaviour.
+        String savedCode = prefs.getDefaultSubtitleLanguage();
+        int initialIndex = 0;
+        if (savedCode != null) {
+            int idx = 0;
+            for (Language lang : SubtitleLanguages.ALL) {
+                if (lang.code3().equalsIgnoreCase(savedCode)) {
+                    initialIndex = idx;
+                    break;
+                }
+                idx++;
+            }
+        }
+        if (subtitleLanguageCombo.getItemCount() > 0) {
+            subtitleLanguageCombo.select(initialIndex);
+        }
+
+        final boolean mergeEnabled = mergeSubtitlesCheckbox.getSelection();
+        subtitleLanguageCombo.setEnabled(mergeEnabled);
+        deleteSubtitlesAfterMergeCheckbox.setEnabled(mergeEnabled);
+
+        mergeSubtitlesCheckbox.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                final boolean nowOn = mergeSubtitlesCheckbox.getSelection();
+                subtitleLanguageCombo.setEnabled(nowOn);
+                deleteSubtitlesAfterMergeCheckbox.setEnabled(nowOn);
+
+                // One-shot warning: only when the user is *enabling* the
+                // feature AND no tool is available on PATH.
+                if (nowOn && !subtitleNoToolWarningShown
+                        && !new SubtitleMergeController().isAnyToolAvailable()) {
+                    subtitleNoToolWarningShown = true;
+                    MessageBox box = new MessageBox(
+                        preferencesShell,
+                        SWT.ICON_INFORMATION | SWT.OK
+                    );
+                    box.setText("Subtitle merge tools not found");
+                    box.setMessage(
+                        "Subtitle merging requires MP4Box (from GPAC, https://gpac.io) "
+                            + "for MP4/M4V files and mkvmerge (from MKVToolNix, "
+                            + "https://mkvtoolnix.org) for MKV files. Make sure at "
+                            + "least one is on your PATH."
+                            + System.lineSeparator()
+                            + System.lineSeparator()
+                            + "The setting is enabled regardless — files in "
+                            + "unsupported formats will be skipped."
+                    );
+                    box.open();
+                }
+            }
+        });
     }
 
     private void createGeneralTab() {
@@ -1874,6 +2015,19 @@ class PreferencesDialog extends Dialog {
         );
         prefs.setTagVideoMetadata(
             tagVideoMetadataCheckbox.getSelection()
+        );
+
+        // Subtitle merge settings.
+        prefs.setMergeSubtitles(mergeSubtitlesCheckbox.getSelection());
+        int selectedLangIdx = subtitleLanguageCombo.getSelectionIndex();
+        if (selectedLangIdx < 0 || selectedLangIdx >= SubtitleLanguages.ALL.size()) {
+            selectedLangIdx = 0;
+        }
+        prefs.setDefaultSubtitleLanguage(
+            SubtitleLanguages.ALL.get(selectedLangIdx).code3()
+        );
+        prefs.setDeleteSubtitlesAfterMerge(
+            deleteSubtitlesAfterMergeCheckbox.getSelection()
         );
 
         // Default is preserve; checkbox is the inverse ("set to now").
