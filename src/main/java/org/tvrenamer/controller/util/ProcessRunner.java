@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -46,6 +47,32 @@ public final class ProcessRunner {
      * @return a {@link Result} with success status, exit code, and output
      */
     public static Result run(List<String> command, int timeoutSeconds) {
+        return runStreaming(command, timeoutSeconds, null);
+    }
+
+    /**
+     * Run an external command, streaming combined stdout/stderr to the given
+     * line consumer as the process produces output.  The consumer is invoked
+     * on the calling thread (the same thread that called this method) once
+     * per output line.  Use this variant when the caller wants to react to
+     * progress or status lines in real time — e.g. parsing a percentage from
+     * tool output to drive a per-row progress label.
+     *
+     * <p>The consumer receives every line emitted by the process; it must
+     * not block (anything slow inside the consumer pauses output draining
+     * and could starve the process if its pipe buffer fills).  Exceptions
+     * from the consumer are caught and logged at FINE so they don't kill
+     * the run.
+     *
+     * @param command        the command and arguments
+     * @param timeoutSeconds maximum time to wait for the process
+     * @param onLine         line consumer (may be null to disable streaming)
+     * @return a {@link Result} containing the full captured output as well
+     */
+    public static Result runStreaming(
+            List<String> command,
+            int timeoutSeconds,
+            Consumer<String> onLine) {
         Process process = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
@@ -59,6 +86,14 @@ public final class ProcessRunner {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output.append(line).append('\n');
+                    if (onLine != null) {
+                        try {
+                            onLine.accept(line);
+                        } catch (RuntimeException re) {
+                            logger.log(Level.FINE,
+                                "ProcessRunner line consumer threw", re);
+                        }
+                    }
                 }
             }
 

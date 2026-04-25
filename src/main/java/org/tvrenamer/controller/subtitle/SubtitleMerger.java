@@ -2,6 +2,7 @@ package org.tvrenamer.controller.subtitle;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.IntConsumer;
 
 /**
  * Mux soft subtitle tracks into a media container.
@@ -40,7 +41,30 @@ public interface SubtitleMerger {
      * then atomically swap.  On failure the original media file is left
      * untouched.
      */
-    MergeOutcome merge(Path mediaFile, List<SubtitleEntry> subtitles);
+    default MergeOutcome merge(Path mediaFile, List<SubtitleEntry> subtitles) {
+        // null progress consumer is the signal for "no progress wanted" — the
+        // merger then takes the non-streaming code path, matching the
+        // pre-progress-feature behaviour exactly.  Test fakes only need to
+        // implement the non-streaming process indirection.
+        return merge(mediaFile, subtitles, null);
+    }
+
+    /**
+     * Mux the supplied subtitle entries into the media file in place,
+     * streaming progress updates (0–100) to the given consumer as the
+     * underlying tool emits parseable progress lines.  Implementations
+     * fall back to silent (no progress) if the tool doesn't expose
+     * progress in its current configuration.
+     *
+     * <p>The consumer is invoked on the merger's worker thread (the same
+     * thread that called {@code merge}); UI implementations must marshal
+     * to the SWT thread inside the consumer.  Updates are not guaranteed
+     * monotonic — clamp to {@code [0, 100]} on consume.
+     */
+    MergeOutcome merge(
+            Path mediaFile,
+            List<SubtitleEntry> subtitles,
+            IntConsumer onProgress);
 
     /** Outcome of a merge attempt. */
     enum MergeOutcome {

@@ -105,6 +105,19 @@ public final class SubtitleMergeController {
      * @return a {@link Result} describing what happened
      */
     public Result mergeIfEnabled(Path mediaFile, FileEpisode episode) {
+        return mergeIfEnabled(mediaFile, episode, p -> { /* no-op */ });
+    }
+
+    /**
+     * Same as {@link #mergeIfEnabled(Path, FileEpisode)} but also forwards
+     * per-percentage progress ticks to the supplied consumer while the
+     * underlying merge tool is running.  Used by callers that want to
+     * surface live progress in the UI.
+     */
+    public Result mergeIfEnabled(
+            Path mediaFile,
+            FileEpisode episode,
+            java.util.function.IntConsumer onProgress) {
         if (!userPrefs.isMergeSubtitles()) {
             return Result.DISABLED;
         }
@@ -206,7 +219,8 @@ public final class SubtitleMergeController {
 
         MergeOutcome outcome;
         try {
-            outcome = merger.merge(mediaFile, toMerge);
+            outcome = merger.merge(mediaFile, toMerge,
+                onProgress == null ? p -> { /* no-op */ } : onProgress);
         } catch (RuntimeException re) {
             logger.log(Level.WARNING,
                 "Unexpected exception from " + merger.getToolName()

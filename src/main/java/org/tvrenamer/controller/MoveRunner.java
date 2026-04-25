@@ -25,6 +25,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.tvrenamer.controller.subtitle.SubtitleEntry;
 import org.tvrenamer.controller.subtitle.SubtitleMergeController;
+import org.tvrenamer.controller.subtitle.SubtitleMergeProgressListener;
+import org.tvrenamer.controller.subtitle.SubtitleMerger;
 import org.tvrenamer.controller.subtitle.SubtitlePairing;
 import org.tvrenamer.controller.util.FileUtilities;
 import org.tvrenamer.controller.util.StringUtils;
@@ -57,6 +59,18 @@ public class MoveRunner implements Runnable {
     private final int numMoves;
     private final int timeout;
     private ProgressUpdater updater = null;
+    private SubtitleMergeProgressListener subtitleListener = null;
+    private org.tvrenamer.model.WorkPlan workPlan = null;
+    /** Number of merge units predicted at start; reconciled when the real count is known. */
+    private int predictedMergeUnits = 0;
+    /**
+     * Destination paths of media files whose subtitle merge was completed
+     * source-side.  Used by the post-batch step to skip files that have
+     * already been merged, avoiding double-counted WorkPlan ticks and
+     * redundant idempotency-check process spawns.
+     */
+    private final Set<Path> sourceMergedDestinations =
+        java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private volatile boolean shutdownRequested = false;
 
@@ -85,6 +99,11 @@ public class MoveRunner implements Runnable {
                     runPostBatchSubtitleMerge();
                     // Aggregate duplicates found by all movers before finishing.
                     aggregateDuplicates();
+                    // Force the unified progress bar to 100% to absorb any
+                    // mismatch between predicted and actual op counts.
+                    if (workPlan != null) {
+                        workPlan.completeAll();
+                    }
                     if (updater != null) {
                         updater.finish();
                     }
@@ -463,6 +482,16 @@ public class MoveRunner implements Runnable {
             }
         }
 
+        // Source-side subtitle merge runs FIRST on the same single-thread executor.
+        // FIFO ordering guarantees the merge completes before any per-file move
+        // starts, so when subtitle FileMovers' .call() runs they observe any
+        // consumedByMerge flags set by the merge phase.
+        for (FileMover move : episodes) {
+            movers.add(move);
+        }
+        Future<Boolean> mergeFuture = EXECUTOR.submit(this::runSourceSideMerge);
+        futures.add(mergeFuture);
+
         // Submit moves in original list order (table display order, top to bottom).
         // Conflict resolution has already modified the FileMover objects in-place.
         for (FileMover move : episodes) {
@@ -471,7 +500,6 @@ public class MoveRunner implements Runnable {
             if (verifiedDirectories.contains(moveDestDir)) {
                 move.setDirectoryPreVerified(true);
             }
-            movers.add(move);
             futures.add(EXECUTOR.submit(move));
         }
         numMoves = episodes.size();
@@ -499,6 +527,41 @@ public class MoveRunner implements Runnable {
     }
 
     /**
+     * Sets the listener notified about post-batch subtitle merge progress.
+     * Implementations marshal back to the UI thread to update row icons and
+     * the bottom status label.  Optional — {@code null} disables progress
+     * reporting (the merge still runs).
+     *
+     * @param listener the listener to notify, or null to disable
+     */
+    public void setSubtitleListener(final SubtitleMergeProgressListener listener) {
+        this.subtitleListener = listener;
+    }
+
+    /**
+     * Provide a {@link org.tvrenamer.model.WorkPlan} for unified progress
+     * accounting across the whole rename action.  Each FileMover receives
+     * the plan; ticks happen on move success, tag completion, and merge
+     * completion.  The {@code predictedMergeUnits} parameter is the
+     * caller's optimistic estimate of merge candidates (typically the
+     * count of media files in the batch); MoveRunner reconciles it with
+     * the actual count once the post-batch merge phase begins.
+     *
+     * @param plan the WorkPlan to drive (may be null to disable)
+     * @param predictedMergeUnits caller's upfront estimate of merge ops
+     */
+    public void setWorkPlan(final org.tvrenamer.model.WorkPlan plan,
+                            final int predictedMergeUnits) {
+        this.workPlan = plan;
+        this.predictedMergeUnits = Math.max(0, predictedMergeUnits);
+        if (plan != null) {
+            for (FileMover m : movers) {
+                m.setWorkPlan(plan);
+            }
+        }
+    }
+
+    /**
      * Shut down all the threads.
      *
      * This is intended for usage just in case the program wants to shut down while the
@@ -517,6 +580,258 @@ public class MoveRunner implements Runnable {
     public void requestShutdown() {
         shutdownRequested = true;
         progressThread.interrupt();
+    }
+
+    // Static caches: detection lookups for the source-side merge are cheap but
+    // we want to avoid per-batch tool resolution.  The merger instances are
+    // immutable and thread-safe.
+    private static final java.util.List<SubtitleMerger> SHARED_MERGERS =
+        java.util.List.of(
+            new org.tvrenamer.controller.subtitle.Mp4SubtitleMerger(),
+            new org.tvrenamer.controller.subtitle.MkvSubtitleMerger());
+
+    /** Subtitle file extensions we recognise (lowercase, leading dot). */
+    private static final Set<String> MR_SUBTITLE_EXTENSIONS =
+        Set.of(".srt", ".ass", ".ssa", ".vtt");
+
+    /**
+     * Source-side subtitle merge.  Runs as the first task on the executor,
+     * before any per-file move.  Pairs FileMovers in the batch by
+     * {@code (sourceDir, canonicalBaseName)} — files that will land in the
+     * same destination directory with matching base names — and merges
+     * paired subtitles into media at the source location, leveraging fast
+     * local I/O.  When {@code deleteSubtitlesAfterMerge} is enabled and the
+     * merge succeeds, the source .srt is deleted and its FileMover marked
+     * consumed so the subsequent move loop skips it.
+     *
+     * <p>Failures here are logged but never propagate; the post-batch merge
+     * step still runs and acts as a fallback for any pair whose source-side
+     * merge couldn't be satisfied (e.g. subtitle in a different source
+     * directory than its media).
+     */
+    private Boolean runSourceSideMerge() {
+        UserPreferences prefs = UserPreferences.getInstance();
+        if (!prefs.isMergeSubtitles()) {
+            return Boolean.TRUE;
+        }
+        logger.fine("runSourceSideMerge: starting; movers=" + movers.size());
+
+        // Group FileMovers by destination dir + canonical base name.
+        // Files that will share a base after rename land in the same group.
+        Map<String, List<FileMover>> groups = new HashMap<>();
+        for (FileMover m : movers) {
+            Path destDir = m.getMoveToDirectory();
+            if (destDir == null) {
+                continue;
+            }
+            String base = stripExt(m.getDesiredDestName());
+            if (base.isEmpty()) {
+                continue;
+            }
+            String key = destDir + "::" + base;
+            groups.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(m);
+        }
+
+        for (List<FileMover> group : groups.values()) {
+            if (group.size() < 2) {
+                continue; // need at least media + one subtitle
+            }
+
+            FileMover mediaMover = null;
+            List<FileMover> subMovers = new java.util.ArrayList<>();
+            for (FileMover m : group) {
+                String ext = extOf(m.getCurrentPath());
+                if (ext.isEmpty()) {
+                    continue;
+                }
+                if (MR_SUBTITLE_EXTENSIONS.contains(ext)) {
+                    subMovers.add(m);
+                } else if (mediaMover == null) {
+                    // First non-subtitle file in the group is treated as the media.
+                    // Multiple medias in one group is unusual; we merge into the first.
+                    mediaMover = m;
+                }
+            }
+            if (mediaMover == null || subMovers.isEmpty()) {
+                continue;
+            }
+
+            String mediaExt = extOf(mediaMover.getCurrentPath());
+            SubtitleMerger merger = null;
+            for (SubtitleMerger candidate : SHARED_MERGERS) {
+                if (candidate.supportsContainerExtension(mediaExt)) {
+                    merger = candidate;
+                    break;
+                }
+            }
+            if (merger == null || !merger.isToolAvailable()) {
+                continue; // post-batch fallback will handle
+            }
+
+            // Build SubtitleEntry list using default language.  Source-side
+            // merge intentionally does not parse filename language tags from
+            // the source name — those are typically scrambled at this point.
+            // Filename-tag detection still happens in the post-batch path.
+            String defaultLang = prefs.getDefaultSubtitleLanguage();
+            String trackName =
+                org.tvrenamer.controller.subtitle.SubtitleLanguages
+                    .findByCode3(defaultLang)
+                    .map(org.tvrenamer.controller.subtitle.SubtitleLanguages.Language::displayName)
+                    .orElse("English");
+            List<org.tvrenamer.controller.subtitle.SubtitleEntry> entries =
+                new java.util.ArrayList<>();
+            for (FileMover sub : subMovers) {
+                String subExt = extOf(sub.getCurrentPath());
+                if (!merger.supportsSubtitleExtension(subExt)) {
+                    continue;
+                }
+                entries.add(new org.tvrenamer.controller.subtitle.SubtitleEntry(
+                    sub.getCurrentPath(),
+                    defaultLang,
+                    trackName,
+                    java.util.EnumSet.noneOf(
+                        org.tvrenamer.controller.subtitle.Descriptor.class)));
+            }
+            if (entries.isEmpty()) {
+                continue;
+            }
+
+            // Idempotency: skip if the media already has the language track.
+            // Important — also add the destination path to the skip-set so the
+            // post-batch step doesn't re-run its own identification check
+            // (which is slow over network destinations and renders nothing
+            // useful on the row).
+            if (merger.alreadyHasLanguageTrack(mediaMover.getCurrentPath(), defaultLang)) {
+                logger.fine("Source-side merge skipped — language already present: "
+                    + mediaMover.getCurrentPath());
+                Path mediaDestDir = mediaMover.getMoveToDirectory();
+                if (mediaDestDir != null) {
+                    Path normalised = mediaDestDir.resolve(mediaMover.getDesiredDestName())
+                        .toAbsolutePath().normalize();
+                    sourceMergedDestinations.add(normalised);
+                    logger.fine("Source-side already-present, will skip in post-batch: "
+                        + normalised);
+                }
+                continue;
+            }
+
+            // Notify listener: merge starting on the source path.
+            if (subtitleListener != null) {
+                try {
+                    subtitleListener.subtitleMergeFileStarted(mediaMover.getCurrentPath());
+                } catch (RuntimeException re) {
+                    logger.log(Level.FINE,
+                        "subtitle listener subtitleMergeFileStarted threw", re);
+                }
+            }
+
+            logger.fine("[SOURCE-SIDE] Invoking " + merger.getClass().getSimpleName()
+                + ".merge on " + mediaMover.getCurrentPath()
+                + " with " + entries.size() + " subtitle(s)");
+            // Per-file progress consumer that forwards each percentage tick
+            // to the subtitle listener for UI rendering on the matching row.
+            final Path mediaSrcPath = mediaMover.getCurrentPath();
+            java.util.function.IntConsumer progressConsumer = pct -> {
+                SubtitleMergeProgressListener listener = subtitleListener;
+                if (listener != null) {
+                    try {
+                        listener.subtitleMergeFileProgress(mediaSrcPath, pct);
+                    } catch (RuntimeException re) {
+                        logger.log(Level.FINE,
+                            "subtitle listener subtitleMergeFileProgress threw", re);
+                    }
+                }
+            };
+            SubtitleMerger.MergeOutcome outcome;
+            try {
+                outcome = merger.merge(mediaSrcPath, entries, progressConsumer);
+            } catch (RuntimeException re) {
+                logger.log(Level.WARNING,
+                    "Exception during source-side merge for "
+                        + mediaSrcPath, re);
+                outcome = SubtitleMerger.MergeOutcome.FAILED;
+            }
+            logger.fine("[SOURCE-SIDE] Outcome=" + outcome
+                + " for " + mediaMover.getCurrentPath());
+
+            if (workPlan != null) {
+                workPlan.tick();
+            }
+
+            // Track the expected destination so the post-batch step can skip
+            // this file (avoids double-tick + redundant tool invocations).
+            // Normalise the path so equals comparison is robust against
+            // representation drift (case, separators, ./ segments).
+            if (outcome == SubtitleMerger.MergeOutcome.SUCCESS) {
+                Path mediaDestDir = mediaMover.getMoveToDirectory();
+                if (mediaDestDir != null) {
+                    Path normalised = mediaDestDir.resolve(mediaMover.getDesiredDestName())
+                        .toAbsolutePath().normalize();
+                    sourceMergedDestinations.add(normalised);
+                    logger.fine("Source-side merged, will skip in post-batch: " + normalised);
+                }
+            }
+
+            // Map merger outcome to controller Result for the listener.
+            SubtitleMergeController.Result reported;
+            switch (outcome) {
+                case SUCCESS -> reported = SubtitleMergeController.Result.SUCCESS;
+                case FAILED -> reported = SubtitleMergeController.Result.FAILED;
+                case SKIPPED_NO_TOOL -> reported = SubtitleMergeController.Result.NO_TOOL;
+                default -> reported = SubtitleMergeController.Result.ALREADY_HAS_LANGUAGE;
+            }
+            if (subtitleListener != null) {
+                final SubtitleMergeController.Result r = reported;
+                final Path mediaPath = mediaMover.getCurrentPath();
+                try {
+                    subtitleListener.subtitleMergeFileFinished(mediaPath, r);
+                } catch (RuntimeException re) {
+                    logger.log(Level.FINE,
+                        "subtitle listener subtitleMergeFileFinished threw", re);
+                }
+            }
+
+            // On success with delete-after-merge, drop the source .srt files
+            // and mark their FileMovers as consumed so the move loop skips.
+            if (outcome == SubtitleMerger.MergeOutcome.SUCCESS
+                    && prefs.isDeleteSubtitlesAfterMerge()) {
+                for (FileMover sub : subMovers) {
+                    Path subPath = sub.getCurrentPath();
+                    try {
+                        Files.deleteIfExists(subPath);
+                        sub.setConsumedByMerge(true);
+                        logger.fine("Deleted merged subtitle (source-side): " + subPath);
+                    } catch (IOException ioe) {
+                        logger.log(Level.WARNING,
+                            "Could not delete merged subtitle: " + subPath, ioe);
+                    }
+                }
+            }
+        }
+
+        return Boolean.TRUE;
+    }
+
+    /** Extension (with leading dot, lowercased) of the given path's filename. */
+    private static String extOf(Path p) {
+        if (p == null) {
+            return "";
+        }
+        String name = p.getFileName() != null ? p.getFileName().toString() : "";
+        int dot = name.lastIndexOf('.');
+        if (dot < 0) {
+            return "";
+        }
+        return name.substring(dot).toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** Strip the final extension off a filename. */
+    private static String stripExt(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        return dot < 0 ? filename : filename.substring(0, dot);
     }
 
     /**
@@ -601,29 +916,136 @@ public class MoveRunner implements Runnable {
             return;
         }
 
-        SubtitleMergeController controller = new SubtitleMergeController();
+        // Build the candidate list up front so we can report a meaningful
+        // total to the listener.  Skip non-regular files; everything else is
+        // a candidate (the controller will filter unsupported extensions).
+        List<Path> candidates = new LinkedList<>();
         for (Path dir : destDirs) {
             try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
                 for (Path entry : stream) {
-                    if (!Files.isRegularFile(entry)) {
-                        continue;
-                    }
-                    SubtitleMergeController.Result result;
-                    try {
-                        result = controller.mergeIfEnabled(entry, null);
-                    } catch (RuntimeException re) {
-                        logger.log(Level.WARNING,
-                            "Exception during subtitle merge for: " + entry, re);
-                        continue;
-                    }
-                    if (result == SubtitleMergeController.Result.SUCCESS
-                            && prefs.isDeleteSubtitlesAfterMerge()) {
-                        deleteSubtitleSiblings(entry, prefs);
+                    if (Files.isRegularFile(entry)) {
+                        candidates.add(entry);
                     }
                 }
             } catch (IOException ioe) {
                 logger.log(Level.WARNING,
                     "Could not scan destination directory for subtitle merge: " + dir, ioe);
+            }
+        }
+
+        // Reconcile the WorkPlan: if the actual candidate count is less than
+        // what the caller predicted (e.g. fewer media files in the destination
+        // than estimated), retract the over-counted units so the bar can still
+        // reach 100%.  If actual > predicted, the missing units were never
+        // counted in the total, so the bar will simply tick past expected
+        // and we let WorkPlan.completeAll() at the end clamp.
+        if (workPlan != null && predictedMergeUnits > candidates.size()) {
+            workPlan.retract(predictedMergeUnits - candidates.size());
+        }
+
+        if (subtitleListener != null) {
+            try {
+                subtitleListener.subtitleMergeStarted(candidates.size());
+            } catch (RuntimeException re) {
+                logger.log(Level.FINE, "subtitle listener subtitleMergeStarted threw", re);
+            }
+        }
+
+        int merged = 0;
+        int skipped = 0;
+        int failed = 0;
+
+        SubtitleMergeController controller = new SubtitleMergeController();
+        for (Path entry : candidates) {
+            // Skip files that were already merged source-side: ticking again
+            // here would over-count the WorkPlan and the idempotency check
+            // would just spawn the tool to confirm what we already know.
+            Path normalisedEntry = entry.toAbsolutePath().normalize();
+            if (sourceMergedDestinations.contains(normalisedEntry)) {
+                logger.fine("Post-batch skipping source-merged: " + normalisedEntry);
+                continue;
+            }
+            // Skip files whose extension isn't a media container any merger
+            // supports.  Subtitle files (.srt etc.) would otherwise reach the
+            // controller and return UNSUPPORTED — but only after firing the
+            // per-row listener (which flickers the row icon) and ticking the
+            // WorkPlan needlessly.  Pre-filtering here is cheap and clean.
+            String entryExt = extOf(entry);
+            boolean isContainer = false;
+            for (SubtitleMerger m : SHARED_MERGERS) {
+                if (m.supportsContainerExtension(entryExt)) {
+                    isContainer = true;
+                    break;
+                }
+            }
+            if (!isContainer) {
+                continue;
+            }
+            logger.fine("Post-batch will examine: " + normalisedEntry);
+            if (subtitleListener != null) {
+                try {
+                    subtitleListener.subtitleMergeFileStarted(entry);
+                } catch (RuntimeException re) {
+                    logger.log(Level.FINE, "subtitle listener subtitleMergeFileStarted threw", re);
+                }
+            }
+
+            logger.fine("[POST-BATCH] Invoking controller.mergeIfEnabled on " + entry);
+            // Forward each progress tick to the listener so the row's
+            // percentage label updates while the merger tool runs.
+            final Path entryPath = entry;
+            java.util.function.IntConsumer postProgressConsumer = pct -> {
+                SubtitleMergeProgressListener listener = subtitleListener;
+                if (listener != null) {
+                    try {
+                        listener.subtitleMergeFileProgress(entryPath, pct);
+                    } catch (RuntimeException re) {
+                        logger.log(Level.FINE,
+                            "subtitle listener subtitleMergeFileProgress threw", re);
+                    }
+                }
+            };
+            SubtitleMergeController.Result result;
+            try {
+                result = controller.mergeIfEnabled(entry, null, postProgressConsumer);
+            } catch (RuntimeException re) {
+                logger.log(Level.WARNING,
+                    "Exception during subtitle merge for: " + entry, re);
+                result = SubtitleMergeController.Result.FAILED;
+            }
+            logger.fine("[POST-BATCH] Result=" + result + " for " + entry);
+
+            if (result == SubtitleMergeController.Result.SUCCESS) {
+                merged++;
+                if (prefs.isDeleteSubtitlesAfterMerge()) {
+                    deleteSubtitleSiblings(entry, prefs);
+                }
+            } else if (result == SubtitleMergeController.Result.FAILED) {
+                failed++;
+            } else {
+                skipped++;
+            }
+
+            // Tick the unified progress bar regardless of outcome — every
+            // candidate counted toward the predicted total.
+            if (workPlan != null) {
+                workPlan.tick();
+            }
+
+            if (subtitleListener != null) {
+                try {
+                    subtitleListener.subtitleMergeFileFinished(entry, result);
+                } catch (RuntimeException re) {
+                    logger.log(Level.FINE, "subtitle listener subtitleMergeFileFinished threw", re);
+                }
+            }
+        }
+
+        if (subtitleListener != null) {
+            try {
+                subtitleListener.subtitleMergeFinished(merged, skipped, failed);
+            } catch (RuntimeException re) {
+                logger.log(Level.FINE, "subtitle listener subtitleMergeFinished threw", re);
             }
         }
     }

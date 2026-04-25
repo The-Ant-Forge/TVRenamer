@@ -4,6 +4,7 @@ import static org.tvrenamer.model.util.Constants.*;
 import static org.tvrenamer.view.Fields.*;
 import static org.tvrenamer.view.ItemState.*;
 
+import java.nio.file.Path;
 import java.text.Collator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -144,6 +145,10 @@ public final class ResultsTable
 
     // Track the currently running move operation so we can cancel it on shutdown.
     private volatile MoveRunner activeMover = null;
+    // The active WorkPlan drives the unified progress bar; non-null while a
+    // rename action is in flight.  When set, byte-based copy progress is
+    // suppressed from the bar (the per-row label still shows percentages).
+    private volatile org.tvrenamer.model.WorkPlan activeWorkPlan = null;
 
     private boolean apiDeprecated = false;
 
@@ -262,6 +267,12 @@ public final class ResultsTable
         final long copiedBytes
     ) {
         if (display == null || display.isDisposed()) {
+            return;
+        }
+        // When a WorkPlan owns the progress bar, byte-based copy progress
+        // would fight the unified op-tick driver — suppress.  The per-row
+        // percentage label is unaffected (handled in FileMonitor directly).
+        if (activeWorkPlan != null) {
             return;
         }
 
@@ -1255,11 +1266,50 @@ public final class ResultsTable
 
             MoveRunner mover = new MoveRunner(pendingMoves);
             mover.setUpdater(new ProgressBarUpdater(this));
+            mover.setSubtitleListener(new TableSubtitleMergeListener());
+
+            // Predict total operations across the whole rename action so the
+            // bottom progress bar can advance once per discrete op (rename,
+            // tag, merge) rather than per file or per byte.  Estimates are
+            // optimistic; MoveRunner reconciles via WorkPlan.retract once
+            // actuals are known.
+            int totalOps = predictTotalOps(pendingMoves);
+            int predictedMergeUnits = predictMergeUnits(pendingMoves);
+            logger.fine("WorkPlan: pendingMoves=" + pendingMoves.size()
+                + " totalOps=" + totalOps
+                + " predictedMergeUnits=" + predictedMergeUnits
+                + " tagOn=" + prefs.isTagVideoMetadata()
+                + " mergeOn=" + prefs.isMergeSubtitles());
+            org.tvrenamer.model.WorkPlan plan =
+                new org.tvrenamer.model.WorkPlan(totalOps);
+            plan.setProgressListener(() -> {
+                final int completed = plan.getCompleted();
+                final int total = plan.getTotal();
+                if (display != null && !display.isDisposed()) {
+                    display.asyncExec(() -> {
+                        if (totalProgressBar == null
+                                || totalProgressBar.isDisposed()) {
+                            return;
+                        }
+                        if (total <= 0) {
+                            totalProgressBar.setSelection(0);
+                            return;
+                        }
+                        totalProgressBar.setMaximum(total);
+                        int safeSel = Math.max(0, Math.min(completed, total));
+                        totalProgressBar.setSelection(safeSel);
+                    });
+                }
+            });
+            mover.setWorkPlan(plan, predictedMergeUnits);
+            activeWorkPlan = plan;
+
             activeMover = mover;
             mover.runThread();
         } catch (RuntimeException e) {
             // If we fail to start the move thread, restore UI state.
             activeMover = null;
+            activeWorkPlan = null;
             logger.log(Level.WARNING, "Failed to start move operation", e);
             actionButton.setEnabled(true);
             throw e;
@@ -1762,6 +1812,7 @@ public final class ResultsTable
 
         // The current move batch (if any) is done.
         activeMover = null;
+        activeWorkPlan = null;
 
         // Reset overall copy progress bar state after each batch.
         if (aggregateCopyProgress != null) {
@@ -1905,12 +1956,20 @@ public final class ResultsTable
             }
 
             if (prefs.isDeleteRowAfterMove()) {
-                // Brief delay so user sees the completed checkmark before row disappears.
-                display.timerExec(COMPLETED_DISPLAY_DELAY_MS, () -> {
-                    if (!item.isDisposed()) {
-                        deleteTableItem(item);
-                    }
-                });
+                if (prefs.isMergeSubtitles()) {
+                    // Defer auto-clear until the post-batch subtitle merge has had
+                    // a chance to update the row.  Otherwise the row disappears
+                    // before its merge state is visible.  The deferred clear is
+                    // fired from the SubtitleMergeProgressListener.
+                    item.setData("tvrenamer.pendingAutoClear", Boolean.TRUE);
+                } else {
+                    // Brief delay so user sees the completed checkmark before row disappears.
+                    display.timerExec(COMPLETED_DISPLAY_DELAY_MS, () -> {
+                        if (!item.isDisposed()) {
+                            deleteTableItem(item);
+                        }
+                    });
+                }
             } else {
                 updateTableItemAfterMove(item);
             }
@@ -2432,5 +2491,357 @@ public final class ResultsTable
         setupMainWindow();
 
         logger.fine("ResultsTable constructor complete.");
+    }
+
+    /** Extensions whose files can have metadata tags written by the existing taggers. */
+    private static final java.util.Set<String> TAGGABLE_EXTENSIONS =
+        java.util.Set.of(".mp4", ".m4v", ".mov", ".mkv", ".webm");
+
+    /** Extensions accepted as media containers by the subtitle mergers. */
+    private static final java.util.Set<String> MERGEABLE_EXTENSIONS =
+        java.util.Set.of(".mp4", ".m4v", ".mkv");
+
+    /** Subtitle extensions recognised by the merger. */
+    private static final java.util.Set<String> SUBTITLE_EXTENSIONS =
+        java.util.Set.of(".srt", ".ass", ".ssa", ".vtt");
+
+    /** @return extension (with leading dot, lowercased) of the given filename. */
+    private static String extOf(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0) {
+            return "";
+        }
+        return filename.substring(dot).toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** @return extension (with leading dot, lowercased) of the given path's filename. */
+    private static String extOf(java.nio.file.Path p) {
+        if (p == null) {
+            return "";
+        }
+        String name = p.getFileName() != null ? p.getFileName().toString() : "";
+        return extOf(name);
+    }
+
+    /** @return the filename with its final extension stripped (or unchanged if no dot). */
+    private static String stripExt(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        return dot < 0 ? filename : filename.substring(0, dot);
+    }
+
+    /**
+     * Predict total work units for the unified progress bar.  Per file:
+     * 1 unit (rename/move, always) + 1 unit if metadata tagging is enabled
+     * and the extension is taggable.  Merge units are added on top via
+     * {@link #predictMergeUnits} which counts actual paired sets from the
+     * proposed canonical names — far more accurate than per-media optimism.
+     */
+    private int predictTotalOps(final java.util.List<org.tvrenamer.controller.FileMover> pendingMoves) {
+        boolean tagOn = prefs.isTagVideoMetadata();
+        int total = 0;
+        for (var m : pendingMoves) {
+            if (m == null) {
+                continue;
+            }
+            total += 1; // rename/move
+            String ext = extOf(m.getCurrentPath());
+            if (tagOn && TAGGABLE_EXTENSIONS.contains(ext)) {
+                total += 1;
+            }
+        }
+        total += predictMergeUnits(pendingMoves);
+        return total;
+    }
+
+    /**
+     * Accurate merge-unit prediction based on the proposed canonical names.
+     *
+     * <p>Two files in the batch will pair after rename if they end up in the
+     * same destination directory and the subtitle file's base name starts
+     * with the media file's base name (which covers bare matches and
+     * language-tagged variants like {@code Show.S01E02.eng.srt}).  We count
+     * one merge unit per media file that has at least one such paired
+     * subtitle in the same destination directory.
+     */
+    private int predictMergeUnits(final java.util.List<org.tvrenamer.controller.FileMover> pendingMoves) {
+        if (!prefs.isMergeSubtitles() || pendingMoves == null) {
+            logger.fine("predictMergeUnits: merge disabled or null list");
+            return 0;
+        }
+        int count = 0;
+        int mediaSeen = 0;
+        int subSeen = 0;
+        for (var media : pendingMoves) {
+            if (media == null) {
+                continue;
+            }
+            String mediaSrcExt = extOf(media.getCurrentPath());
+            if (!MERGEABLE_EXTENSIONS.contains(mediaSrcExt)) {
+                if (SUBTITLE_EXTENSIONS.contains(mediaSrcExt)) {
+                    subSeen++;
+                }
+                continue;
+            }
+            mediaSeen++;
+            java.nio.file.Path mediaDestDir = media.getMoveToDirectory();
+            if (mediaDestDir == null) {
+                logger.fine("predictMergeUnits: null destDir for "
+                    + media.getCurrentPath());
+                continue;
+            }
+            String mediaCanonical = media.getDesiredDestName();
+            String mediaBase = stripExt(mediaCanonical);
+            if (mediaBase.isEmpty()) {
+                logger.fine("predictMergeUnits: empty mediaBase for "
+                    + media.getCurrentPath() + " (canonical=" + mediaCanonical + ")");
+                continue;
+            }
+            // Look for any subtitle FileMover in the same destination dir
+            // whose canonical base name starts with the media's base name.
+            boolean paired = false;
+            for (var sub : pendingMoves) {
+                if (sub == null || sub == media) {
+                    continue;
+                }
+                String subSrcExt = extOf(sub.getCurrentPath());
+                if (!SUBTITLE_EXTENSIONS.contains(subSrcExt)) {
+                    continue;
+                }
+                java.nio.file.Path subDestDir = sub.getMoveToDirectory();
+                if (subDestDir == null || !subDestDir.equals(mediaDestDir)) {
+                    logger.fine("predictMergeUnits: dest dir mismatch — media="
+                        + mediaDestDir + " sub=" + subDestDir);
+                    continue;
+                }
+                String subBase = stripExt(sub.getDesiredDestName());
+                if (subBase.startsWith(mediaBase)) {
+                    paired = true;
+                    logger.fine("predictMergeUnits: pair found media="
+                        + mediaCanonical + " sub=" + sub.getDesiredDestName());
+                    break;
+                } else {
+                    logger.fine("predictMergeUnits: prefix miss — mediaBase='"
+                        + mediaBase + "' subBase='" + subBase + "'");
+                }
+            }
+            if (paired) {
+                count++;
+            }
+        }
+        logger.fine("predictMergeUnits: media=" + mediaSeen + " subs=" + subSeen
+            + " paired=" + count);
+        return count;
+    }
+
+    /**
+     * Locate the {@link TableItem} whose {@link FileEpisode} currently lives at
+     * the given path.  We compare {@link FileEpisode#getPath()} which is updated
+     * to the destination once a move succeeds, so post-batch lookups by
+     * destination Path resolve correctly.
+     */
+    private TableItem findItemByPath(final Path path) {
+        if (path == null || swtTable == null || swtTable.isDisposed()) {
+            return null;
+        }
+        for (TableItem item : swtTable.getItems()) {
+            if (item.isDisposed()) {
+                continue;
+            }
+            Object data = item.getData(EPISODE_DATA_KEY);
+            if (data instanceof FileEpisode ep) {
+                Path p = ep.getPath();
+                if (p != null && p.equals(path)) {
+                    return item;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Listener that surfaces post-batch subtitle merge progress in the UI.
+     *
+     * <p>All callbacks run on the MoveRunner worker thread; we marshal back
+     * to the UI thread via {@link Display#asyncExec}.  Per-file events flip
+     * the row icon to {@link ItemState#RENAMING} (pencil) for the duration of
+     * the merge, then to {@link ItemState#COMPLETED} (or {@link ItemState#FAIL})
+     * when the controller reports its outcome.  Files with no paired
+     * subtitles short-circuit silently — their row icon is left untouched.
+     *
+     * <p>If the user enabled "delete row after move" while subtitle merge is
+     * also enabled, {@link #finishMove} parked the auto-clear pending; we
+     * fire the deferred timer here once the row's merge state is final.
+     */
+    private final class TableSubtitleMergeListener
+            implements org.tvrenamer.controller.subtitle.SubtitleMergeProgressListener {
+
+        // Total candidates and per-file counter for the bottom progress bar.
+        // The bar's max is set to totalCandidates at the start of the merge
+        // phase and selection advances by one per file as it completes.
+        private int totalCandidates = 0;
+        private int currentIndex = 0;
+
+        // Per-row percentage label overlays during the merge.  Keyed by the
+        // TableItem whose status cell hosts the label.  Created on
+        // subtitleMergeFileStarted, updated on subtitleMergeFileProgress,
+        // disposed on subtitleMergeFileFinished.  Uses createProgressLabel
+        // so the existing FileMonitor-style overlay machinery is reused.
+        private final java.util.Map<TableItem, FileMonitor.ProgressLabelResult>
+            mergeProgressLabels = new java.util.HashMap<>();
+        private final java.text.NumberFormat percentFormat =
+            java.text.NumberFormat.getPercentInstance();
+        {
+            percentFormat.setMaximumFractionDigits(1);
+        }
+
+        @Override
+        public void subtitleMergeStarted(int totalCandidates) {
+            if (display == null || display.isDisposed()) {
+                return;
+            }
+            this.totalCandidates = totalCandidates;
+            this.currentIndex = 0;
+            // Bar is driven by the unified WorkPlan in ResultsTable; merge
+            // ticks are issued from MoveRunner.runPostBatchSubtitleMerge.
+            // No direct bar manipulation here.
+        }
+
+        @Override
+        public void subtitleMergeFileStarted(Path mediaFile) {
+            if (display == null || display.isDisposed()) {
+                return;
+            }
+            display.asyncExec(() -> {
+                TableItem item = findItemByPath(mediaFile);
+                if (item == null || item.isDisposed()) {
+                    return;
+                }
+                STATUS_FIELD.setCellImage(item, MERGING);
+                // Create a percentage overlay on the status cell.  It will
+                // be updated by subtitleMergeFileProgress and disposed by
+                // subtitleMergeFileFinished.
+                FileMonitor.ProgressLabelResult prev = mergeProgressLabels.remove(item);
+                if (prev != null) {
+                    if (prev.label() != null && !prev.label().isDisposed()) {
+                        prev.label().dispose();
+                    }
+                    if (prev.editor() != null) {
+                        prev.editor().dispose();
+                    }
+                }
+                FileMonitor.ProgressLabelResult overlay = createProgressLabel(item);
+                if (overlay != null) {
+                    overlay.label().setText("0%");
+                    mergeProgressLabels.put(item, overlay);
+                }
+            });
+        }
+
+        @Override
+        public void subtitleMergeFileProgress(Path mediaFile, int percent) {
+            if (display == null || display.isDisposed()) {
+                return;
+            }
+            // Clamp defensively; the producers already clamp but listener
+            // contracts say to be permissive.
+            final int pct = Math.max(0, Math.min(100, percent));
+            display.asyncExec(() -> {
+                TableItem item = findItemByPath(mediaFile);
+                if (item == null || item.isDisposed()) {
+                    return;
+                }
+                FileMonitor.ProgressLabelResult overlay = mergeProgressLabels.get(item);
+                if (overlay == null) {
+                    return;
+                }
+                Label label = overlay.label();
+                if (label != null && !label.isDisposed()) {
+                    label.setText(percentFormat.format(pct / 100.0));
+                }
+            });
+        }
+
+        @Override
+        public void subtitleMergeFileFinished(
+                Path mediaFile,
+                org.tvrenamer.controller.subtitle.SubtitleMergeController.Result result) {
+            if (display == null || display.isDisposed()) {
+                return;
+            }
+            currentIndex++;
+            display.asyncExec(() -> {
+                TableItem item = findItemByPath(mediaFile);
+                if (item == null || item.isDisposed()) {
+                    return;
+                }
+                // Tear down the percentage overlay (if any) so the row's
+                // status icon becomes visible again.
+                FileMonitor.ProgressLabelResult overlay = mergeProgressLabels.remove(item);
+                if (overlay != null) {
+                    if (overlay.label() != null && !overlay.label().isDisposed()) {
+                        overlay.label().dispose();
+                    }
+                    if (overlay.editor() != null) {
+                        overlay.editor().dispose();
+                    }
+                }
+                switch (result) {
+                    case SUCCESS -> STATUS_FIELD.setCellImage(item, COMPLETED);
+                    case FAILED -> STATUS_FIELD.setCellImage(item, FAIL);
+                    default -> {
+                        // No-op outcomes (DISABLED, NO_SUBTITLES_FOUND, NO_TOOL,
+                        // ALREADY_HAS_LANGUAGE, UNSUPPORTED): the row's existing
+                        // SUCCESS icon already reflects rename completion;
+                        // restore it now that the brief MERGING flicker is past.
+                        STATUS_FIELD.setCellImage(item, SUCCESS);
+                    }
+                }
+
+                // If auto-clear was deferred from finishMove, fire it now that
+                // this row's merge outcome is settled.
+                if (Boolean.TRUE.equals(item.getData("tvrenamer.pendingAutoClear"))) {
+                    item.setData("tvrenamer.pendingAutoClear", null);
+                    display.timerExec(COMPLETED_DISPLAY_DELAY_MS, () -> {
+                        if (!item.isDisposed()) {
+                            deleteTableItem(item);
+                        }
+                    });
+                }
+            });
+        }
+
+        @Override
+        public void subtitleMergeFinished(int merged, int skipped, int failed) {
+            if (display == null || display.isDisposed()) {
+                return;
+            }
+            display.asyncExec(() -> {
+                // Sweep any rows that were left pending (e.g. media files in the
+                // destination directory that the controller didn't visit).
+                if (swtTable != null && !swtTable.isDisposed()) {
+                    for (TableItem item : swtTable.getItems()) {
+                        if (item.isDisposed()) {
+                            continue;
+                        }
+                        if (Boolean.TRUE.equals(item.getData("tvrenamer.pendingAutoClear"))) {
+                            item.setData("tvrenamer.pendingAutoClear", null);
+                            display.timerExec(COMPLETED_DISPLAY_DELAY_MS, () -> {
+                                if (!item.isDisposed()) {
+                                    deleteTableItem(item);
+                                }
+                            });
+                        }
+                    }
+                }
+                // Bar will be reset to 0 by ProgressBarUpdater.finish() once
+                // MoveRunner.run() returns from the post-batch step.
+            });
+        }
     }
 }

@@ -531,7 +531,10 @@ class SubtitleMergeControllerTest {
         }
 
         @Override
-        public MergeOutcome merge(Path mediaFile, List<SubtitleEntry> subtitles) {
+        public MergeOutcome merge(
+                Path mediaFile,
+                List<SubtitleEntry> subtitles,
+                java.util.function.IntConsumer onProgress) {
             mergeCalls++;
             capturedEntries = (subtitles == null)
                 ? Collections.emptyList()

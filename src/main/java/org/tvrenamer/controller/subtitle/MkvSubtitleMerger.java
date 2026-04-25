@@ -16,6 +16,8 @@ import org.tvrenamer.controller.util.ExternalToolDetector;
 import org.tvrenamer.controller.util.ProcessRunner;
 import org.tvrenamer.controller.util.StringUtils;
 
+import java.util.function.IntConsumer;
+
 /**
  * Mux subtitle tracks into an MKV container using {@code mkvmerge} (MKVToolNix).
  *
@@ -168,7 +170,10 @@ public class MkvSubtitleMerger implements SubtitleMerger {
     }
 
     @Override
-    public MergeOutcome merge(Path mediaFile, List<SubtitleEntry> subtitles) {
+    public MergeOutcome merge(
+            Path mediaFile,
+            List<SubtitleEntry> subtitles,
+            IntConsumer onProgress) {
         if (subtitles == null || subtitles.isEmpty()) {
             // Defensive: the controller filters before calling, so this is a vacuous
             // success rather than an error.
@@ -193,10 +198,38 @@ public class MkvSubtitleMerger implements SubtitleMerger {
             return MergeOutcome.FAILED;
         }
 
-        List<String> cmd = buildCommand(currentToolPath(), mediaFile, tempFile, subtitles);
+        List<String> cmd = buildCommand(currentToolPath(), mediaFile, tempFile,
+            subtitles, onProgress != null);
         int timeoutSeconds = SubtitleSwap.computeTimeoutSeconds(sourceBytes);
 
-        ProcessRunner.Result result = runProcess(cmd, timeoutSeconds);
+        // Parse #GUI#progress NN% lines from --gui-mode output and forward
+        // the percentage to the caller.  Errors in the consumer are caught
+        // by ProcessRunner.runStreaming, so we don't have to.
+        java.util.function.Consumer<String> lineSink = (onProgress == null)
+            ? null
+            : line -> {
+                int idx = line.indexOf("#GUI#progress ");
+                if (idx >= 0) {
+                    int percentEnd = line.indexOf('%', idx);
+                    if (percentEnd > idx) {
+                        try {
+                            int pct = Integer.parseInt(
+                                line.substring(idx + "#GUI#progress ".length(),
+                                    percentEnd).trim());
+                            onProgress.accept(Math.max(0, Math.min(100, pct)));
+                        } catch (NumberFormatException ignored) {
+                            // Bogus progress line; ignore.
+                        }
+                    }
+                }
+            };
+
+        // When no progress consumer is requested we use the original
+        // non-streaming runProcess overload — keeps test fakes that only
+        // override the 2-arg version working unchanged.
+        ProcessRunner.Result result = (lineSink == null)
+            ? runProcess(cmd, timeoutSeconds)
+            : runProcess(cmd, timeoutSeconds, lineSink);
 
         if (result == null || !result.success()) {
             int exitCode = (result == null) ? -1 : result.exitCode();
@@ -245,8 +278,23 @@ public class MkvSubtitleMerger implements SubtitleMerger {
                                      Path mediaFile,
                                      Path tempFile,
                                      List<SubtitleEntry> subtitles) {
+        return buildCommand(toolPath, mediaFile, tempFile, subtitles, false);
+    }
+
+    /**
+     * Variant that optionally adds {@code --gui-mode} so mkvmerge emits
+     * parseable {@code #GUI#progress NN%} lines for live progress reporting.
+     */
+    static List<String> buildCommand(String toolPath,
+                                     Path mediaFile,
+                                     Path tempFile,
+                                     List<SubtitleEntry> subtitles,
+                                     boolean withGuiMode) {
         List<String> cmd = new ArrayList<>();
         cmd.add(toolPath);
+        if (withGuiMode) {
+            cmd.add("--gui-mode");
+        }
         cmd.add("-o");
         cmd.add(tempFile.toString());
         cmd.add(mediaFile.toString());
@@ -285,6 +333,19 @@ public class MkvSubtitleMerger implements SubtitleMerger {
      */
     ProcessRunner.Result runProcess(List<String> command, int timeoutSeconds) {
         return ProcessRunner.run(command, timeoutSeconds);
+    }
+
+    /**
+     * Streaming variant of {@link #runProcess} — used during the merge to
+     * parse {@code --gui-mode} progress lines.  Tests can override either
+     * overload independently.  Defaults to delegating to
+     * {@link ProcessRunner#runStreaming}.
+     */
+    ProcessRunner.Result runProcess(
+            List<String> command,
+            int timeoutSeconds,
+            java.util.function.Consumer<String> onLine) {
+        return ProcessRunner.runStreaming(command, timeoutSeconds, onLine);
     }
 
     // ---- Tool detection (cache once per JVM) ----

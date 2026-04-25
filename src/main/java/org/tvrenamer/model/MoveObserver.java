@@ -46,4 +46,15 @@ public interface MoveObserver {
      *    the FileEpisode that this observer was associated with
      */
     void finishProgress(FileEpisode episode);
+
+    /**
+     * Signal a sub-phase transition so the view layer can update the row
+     * status icon (e.g. flip from "moving" to "tagging").  Default: no-op,
+     * for observers that don't render row phases.
+     *
+     * @param phase the new phase the row has entered
+     */
+    default void onPhaseChange(RowPhase phase) {
+        // Default no-op; the UI implementation overrides.
+    }
 }

@@ -67,9 +67,24 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
         ProcessRunner.Result run(List<String> command, int timeoutSeconds);
     }
 
+    /**
+     * Streaming variant — invoked during the merge so we can parse MP4Box's
+     * {@code ISO File Writing: |======| (NN/100)} progress lines and forward
+     * the percentage to the caller's progress consumer.
+     */
+    @FunctionalInterface
+    interface RunStreamingOperation {
+        ProcessRunner.Result run(
+                List<String> command,
+                int timeoutSeconds,
+                java.util.function.Consumer<String> onLine);
+    }
+
     static final RunOperation REAL_RUN = ProcessRunner::run;
+    static final RunStreamingOperation REAL_STREAM = ProcessRunner::runStreaming;
 
     private static volatile RunOperation runOperation = REAL_RUN;
+    private static volatile RunStreamingOperation runStreamingOperation = REAL_STREAM;
 
     /** Replace the {@link RunOperation}; intended for tests only. */
     static void setRunOperation(RunOperation op) {
@@ -209,7 +224,10 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
     }
 
     @Override
-    public MergeOutcome merge(Path mediaFile, List<SubtitleEntry> subtitles) {
+    public MergeOutcome merge(
+            Path mediaFile,
+            List<SubtitleEntry> subtitles,
+            java.util.function.IntConsumer onProgress) {
         if (subtitles == null || subtitles.isEmpty()) {
             // Vacuously successful: nothing to do.
             return MergeOutcome.SUCCESS;
@@ -243,9 +261,40 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
         }
         int timeoutSeconds = SubtitleSwap.computeTimeoutSeconds(sourceBytes);
 
+        // Parse MP4Box's "ISO File Writing: |......| (NN/100)" progress lines
+        // and forward the percentage to the caller.  Any other parsing pattern
+        // is silently ignored.  When onProgress is null we skip the streaming
+        // path entirely — preserves the pre-progress-feature behaviour and
+        // matches what existing test fakes inject (non-streaming RunOperation).
+        java.util.function.Consumer<String> lineSink = (onProgress == null)
+            ? null
+            : line -> {
+                int idx = line.indexOf("(");
+                int slash = (idx < 0) ? -1 : line.indexOf('/', idx);
+                int closeParen = (slash < 0) ? -1 : line.indexOf(')', slash);
+                if (slash > idx && closeParen > slash) {
+                    String numStr = line.substring(idx + 1, slash).trim();
+                    String denStr = line.substring(slash + 1, closeParen).trim();
+                    try {
+                        int num = Integer.parseInt(numStr);
+                        int den = Integer.parseInt(denStr);
+                        if (den > 0) {
+                            int pct = (int) Math.round(num * 100.0 / den);
+                            onProgress.accept(Math.max(0, Math.min(100, pct)));
+                        }
+                    } catch (NumberFormatException ignored) {
+                        // Not a progress line — ignore.
+                    }
+                }
+            };
+
         ProcessRunner.Result result;
         try {
-            result = runOperation.run(cmd, timeoutSeconds);
+            if (lineSink != null) {
+                result = runStreamingOperation.run(cmd, timeoutSeconds, lineSink);
+            } else {
+                result = runOperation.run(cmd, timeoutSeconds);
+            }
         } catch (RuntimeException re) {
             logger.log(Level.WARNING, "MP4Box threw while merging " + mediaFile, re);
             deleteQuietly(temp);

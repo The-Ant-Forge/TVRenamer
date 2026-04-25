@@ -9,6 +9,7 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.TableItem;
 import org.tvrenamer.model.FileEpisode;
 import org.tvrenamer.model.MoveObserver;
+import org.tvrenamer.model.RowPhase;
 
 public class FileMonitor implements MoveObserver {
 
@@ -125,6 +126,35 @@ public class FileMonitor implements MoveObserver {
                 return;
             }
             label.setText(format.format((double) value / maximum));
+        });
+    }
+
+    /**
+     * Update the row's status icon to reflect a sub-phase transition.
+     * The percentage label (created during a copy) overlays the status
+     * cell, so phase icons are most visible when no copy progress is
+     * being shown — but we update the underlying icon either way so the
+     * correct icon appears as soon as the percentage label disposes.
+     *
+     * @param phase the new phase the row has entered
+     */
+    @Override
+    public void onPhaseChange(final RowPhase phase) {
+        if (phase == null || display == null || display.isDisposed()) {
+            return;
+        }
+        if (item == null || item.isDisposed()) {
+            return;
+        }
+        final ItemState target = switch (phase) {
+            case MOVING -> ItemState.MOVING;
+            case TAGGING -> ItemState.TAGGING;
+        };
+        display.asyncExec(() -> {
+            if (display.isDisposed() || item.isDisposed()) {
+                return;
+            }
+            Fields.STATUS_FIELD.setCellImage(item, target);
         });
     }
 

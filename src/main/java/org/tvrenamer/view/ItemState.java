@@ -44,6 +44,25 @@ public class ItemState {
         "e",
         "16-em-pencil.png"
     );
+
+    // Mid-pipeline phase: file move/copy in progress (post-rename).
+    public static final ItemState MOVING = new ItemState(
+        "e2",
+        "16-arrow-right.png"
+    );
+
+    // Mid-pipeline phase: embedding metadata into the moved file.
+    public static final ItemState TAGGING = new ItemState(
+        "e3",
+        "16-tag-pencil.png"
+    );
+
+    // Mid-pipeline phase: muxing subtitle tracks into the moved file.
+    public static final ItemState MERGING = new ItemState(
+        "e4",
+        "16-video-rect.png"
+    );
+
     public static final ItemState FAIL = new ItemState("f", "16-em-cross.png");
 
     // Indicates a file was successfully moved/renamed.
@@ -59,6 +78,9 @@ public class ItemState {
         DOWNLOADING,
         ACTION_REQUIRED,
         RENAMING,
+        MOVING,
+        TAGGING,
+        MERGING,
         FAIL,
         COMPLETED,
     };

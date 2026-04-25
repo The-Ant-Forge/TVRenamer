@@ -30,6 +30,15 @@ public class FileMover implements Callable<Boolean> {
     static final UserPreferences userPrefs = UserPreferences.getInstance();
 
     private final FileEpisode episode;
+    private org.tvrenamer.model.WorkPlan workPlan = null;
+    private boolean tagWasAttempted = false;
+    /**
+     * Set when the source-side subtitle merge has consumed this file (deleting
+     * its source .srt because delete-after-merge is enabled).  When true, this
+     * FileMover's {@link #call} short-circuits — no move, no tag — but still
+     * ticks the WorkPlan so the predicted unit is accounted for.
+     */
+    private volatile boolean consumedByMerge = false;
     private final Path destRoot;
     private final String destBasename;
     private final String destSuffix;
@@ -74,6 +83,35 @@ public class FileMover implements Callable<Boolean> {
      */
     public void setDirectoryPreVerified(boolean verified) {
         this.directoryPreVerified = verified;
+    }
+
+    /**
+     * Provide a {@link org.tvrenamer.model.WorkPlan} so this FileMover can
+     * tick progress as discrete operations complete.  Two ticks are issued
+     * per successful run: one for the rename/move, and (only if tagging
+     * actually fired) one for the metadata tag op.  When no plan is set,
+     * {@code maybeTick} is a no-op.
+     */
+    public void setWorkPlan(org.tvrenamer.model.WorkPlan plan) {
+        this.workPlan = plan;
+    }
+
+    /**
+     * Mark this FileMover as fully consumed by the source-side subtitle merge.
+     * Used when {@code deleteSubtitlesAfterMerge} is enabled — the source .srt
+     * has been embedded into its paired media and the original deleted, so
+     * there's nothing left for this mover to do.  When set, {@link #call}
+     * short-circuits to a successful no-op while still ticking the WorkPlan so
+     * the budgeted move unit isn't lost.
+     */
+    public void setConsumedByMerge(boolean consumed) {
+        this.consumedByMerge = consumed;
+    }
+
+    private void tick() {
+        if (workPlan != null) {
+            workPlan.tick();
+        }
     }
 
     /**
@@ -149,7 +187,7 @@ public class FileMover implements Callable<Boolean> {
      *
      * @return the filename that we want to move the file to
      */
-    String getDesiredDestName() {
+    public String getDesiredDestName() {
         return destBasename + destSuffix;
     }
 
@@ -279,6 +317,10 @@ public class FileMover implements Callable<Boolean> {
         final Path actualDest,
         final FileTime originalMtime
     ) {
+        // Move/rename op succeeded — tick the unified progress bar once.
+        // Tag op (if it runs below) ticks separately inside tagFileIfEnabled.
+        tick();
+
         try {
             if (userPrefs.isPreserveFileModificationTime()) {
                 // Preserve original timestamp (default behavior for the fork).
@@ -301,8 +343,9 @@ public class FileMover implements Callable<Boolean> {
             );
         }
 
-        // Optional: tag video file with TV metadata (show, season, episode, title).
-        tagFileIfEnabled(actualDest);
+        // Tagging now runs at the source location before the move (see
+        // doActualMove); the moved file already carries the tagged metadata
+        // by this point.  Nothing tag-related happens here.
 
         // Optional: find duplicate video files in the destination directory.
         // They'll be shown to the user for confirmation after all moves complete.
@@ -348,14 +391,26 @@ public class FileMover implements Callable<Boolean> {
         if (!userPrefs.isTagVideoMetadata()) {
             return;
         }
+        tagWasAttempted = true;
         try {
             MetadataTaggingController taggingController = new MetadataTaggingController();
             MetadataTaggingController.TaggingResult result = taggingController.tagIfEnabled(videoFile, episode);
             if (!result.isOk()) {
                 logger.warning("Failed to tag metadata for: " + videoFile);
             }
+            // Only tick when an actual tag op was attempted.  UNSUPPORTED
+            // (e.g. .srt files) and DISABLED produce no tag work, and the
+            // WorkPlan prediction only budgets tag units for taggable
+            // extensions — so phantom ticks here would push the bar past
+            // 100% during the move phase.
+            if (result == MetadataTaggingController.TaggingResult.SUCCESS
+                    || result == MetadataTaggingController.TaggingResult.FAILED) {
+                tick();
+            }
         } catch (Exception e) {
             logger.log(Level.WARNING, "Exception during metadata tagging for: " + videoFile, e);
+            // Tag op finished even if it failed — tick so the bar can still reach 100%.
+            tick();
         }
     }
 
@@ -393,6 +448,20 @@ public class FileMover implements Callable<Boolean> {
 
         // Record whether this move will require copy+delete (used for overall progress reporting).
         willUseCopyAndDelete = !tryRename;
+
+        // Local tagging: run BEFORE the move so the tag tool reads/writes
+        // on the source disk (typically a fast local volume) rather than
+        // over a network share.  After the move, the moved file already
+        // carries the embedded metadata.
+        if (observer != null && userPrefs.isTagVideoMetadata()) {
+            observer.onPhaseChange(org.tvrenamer.model.RowPhase.TAGGING);
+        }
+        tagFileIfEnabled(srcPath);
+
+        // Per-row phase signal: file is now being moved/copied.
+        if (observer != null) {
+            observer.onPhaseChange(org.tvrenamer.model.RowPhase.MOVING);
+        }
 
         if (tryRename) {
             boolean overwrite = userPrefs.isAlwaysOverwriteDestination();
@@ -592,6 +661,19 @@ public class FileMover implements Callable<Boolean> {
      */
     @Override
     public Boolean call() {
+        // Source-side merge has already deleted this file's source (it was
+        // embedded into its paired media).  Short-circuit: mark the episode
+        // as already-in-place so the row reads as success, tick the WorkPlan
+        // once to account for the budgeted move unit, and let the observer
+        // finish normally so per-row UI cleanup runs.
+        if (consumedByMerge) {
+            episode.setAlreadyInPlace();
+            tick();
+            if (observer != null) {
+                observer.finishProgress(episode);
+            }
+            return Boolean.TRUE;
+        }
         try {
             // There are numerous reasons why the move would fail. Instead of calling
             // setFailToMove on the episode in each individual case, make the functionality
