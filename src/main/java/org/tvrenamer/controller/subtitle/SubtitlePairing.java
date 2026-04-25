@@ -36,59 +36,6 @@ public final class SubtitlePairing {
     /** Subtitle file extensions we recognise (lowercase, leading dot). */
     public static final Set<String> SUPPORTED_EXTENSIONS = Set.of(".srt", ".ass", ".ssa", ".vtt");
 
-    /**
-     * Track-flavour descriptors recognised in subtitle filenames.
-     * Multiple descriptors may apply to the same track (e.g. forced + SDH).
-     */
-    public enum Descriptor {
-        SDH,
-        FORCED,
-        COMMENTARY,
-        SIGNS,
-        SONGS,
-        DUB;
-
-        /**
-         * Map a lowercase filename token to a {@link Descriptor}.
-         *
-         * @param token a token already lowercased
-         * @return the matching descriptor, or empty if not a known descriptor token
-         */
-        static Optional<Descriptor> fromToken(String token) {
-            return switch (token) {
-                case "sdh", "cc", "hi", "hearingimpaired" -> Optional.of(SDH);
-                case "forced" -> Optional.of(FORCED);
-                case "commentary" -> Optional.of(COMMENTARY);
-                case "signs" -> Optional.of(SIGNS);
-                case "songs" -> Optional.of(SONGS);
-                case "dub" -> Optional.of(DUB);
-                default -> Optional.empty();
-            };
-        }
-
-        /** @return the human-readable form for inclusion in track names. */
-        String display() {
-            return switch (this) {
-                case SDH -> "SDH";
-                case FORCED -> "Forced";
-                case COMMENTARY -> "Commentary";
-                case SIGNS -> "Signs";
-                case SONGS -> "Songs";
-                case DUB -> "Dub";
-            };
-        }
-    }
-
-    /**
-     * One paired subtitle file ready to be muxed.
-     *
-     * @param file        the absolute path of the subtitle file
-     * @param langCode3   3-letter ISO 639-2 B-form language code (never blank)
-     * @param trackName   the human-readable track name to embed in the container
-     * @param descriptors any track flavours parsed from the filename
-     */
-    public record SubtitleEntry(Path file, String langCode3, String trackName, EnumSet<Descriptor> descriptors) { }
-
     private SubtitlePairing() {
         // utility class
     }

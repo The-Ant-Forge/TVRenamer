@@ -12,8 +12,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.tvrenamer.controller.subtitle.SubtitlePairing.Descriptor;
-import org.tvrenamer.controller.subtitle.SubtitlePairing.SubtitleEntry;
+// Descriptor and SubtitleEntry are top-level types in this same package; no import needed.
 
 class SubtitlePairingTest {
 
