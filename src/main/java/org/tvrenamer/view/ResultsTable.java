@@ -579,7 +579,10 @@ public final class ResultsTable
             STATUS_FIELD.setCellImage(item, OPTIONS);
             item.setChecked(true);
         } else if (epsFound == 1) {
-            STATUS_FIELD.setCellImage(item, SUCCESS);
+            // Row is parsed and matched but no pipeline work has run yet —
+            // pre-pipeline "thumbs-up / ready" indicator.  COMPLETED is
+            // reserved for end-of-pipeline (see finishMove).
+            STATUS_FIELD.setCellImage(item, READY);
             item.setChecked(true);
         } else {
             failTableItem(item);
@@ -1947,12 +1950,18 @@ public final class ResultsTable
                 label.getParent().layout(true, true);
             }
 
-            // Mark as completed for "Clear Completed" behavior when auto-clear is disabled.
-            // The SUCCESS icon (ready to rename) is already visible; no need to change it.
-            // For copy operations, the progress bar overlay was disposed in FileMonitor.finishProgress,
-            // revealing the underlying SUCCESS icon.
+            // Mark as completed for "Clear Completed" behavior when auto-clear is disabled,
+            // and flip the row's status icon to the post-pipeline COMPLETED tick.  The
+            // underlying icon was last set to MOVING (or TAGGING) by FileMover's
+            // onPhaseChange, and for copy operations a percentage label has been overlaying
+            // it — both have been replaced/disposed by now, so the new image takes effect
+            // immediately.  If a post-batch subtitle merge will still visit this row, its
+            // listener will overwrite COMPLETED with MERGING and then back to COMPLETED;
+            // for the common no-merge or source-side-merge path, COMPLETED is the final
+            // state until the row is auto-cleared or the user clears the table.
             if (item != null && !item.isDisposed()) {
                 item.setData("tvrenamer.moveCompleted", Boolean.TRUE);
+                STATUS_FIELD.setCellImage(item, COMPLETED);
             }
 
             if (prefs.isDeleteRowAfterMove()) {
@@ -2796,10 +2805,16 @@ public final class ResultsTable
                     case FAILED -> STATUS_FIELD.setCellImage(item, FAIL);
                     default -> {
                         // No-op outcomes (DISABLED, NO_SUBTITLES_FOUND, NO_TOOL,
-                        // ALREADY_HAS_LANGUAGE, UNSUPPORTED): the row's existing
-                        // SUCCESS icon already reflects rename completion;
-                        // restore it now that the brief MERGING flicker is past.
-                        STATUS_FIELD.setCellImage(item, SUCCESS);
+                        // ALREADY_HAS_LANGUAGE, UNSUPPORTED).  For source-side
+                        // merge this fires BEFORE the move, so the row's still
+                        // mid-pipeline — restore READY so the row reads as
+                        // "still pending the move/tag step" rather than "done".
+                        // For post-batch merge this fires after the move; the
+                        // move's finishMove already set COMPLETED, which we'd
+                        // briefly overwrite with READY here — but the
+                        // pendingAutoClear timer fires in milliseconds, so the
+                        // visual blip is acceptable.
+                        STATUS_FIELD.setCellImage(item, READY);
                     }
                 }
 

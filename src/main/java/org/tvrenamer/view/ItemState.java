@@ -17,10 +17,29 @@ public class ItemState {
         );
     }
 
+    /**
+     * Generic "validated / OK" indicator (still used by the Preferences
+     * matching tab to mark a valid override row).  In the file pipeline
+     * this is no longer used as the "ready to rename" state — see
+     * {@link #READY} below.
+     */
     public static final ItemState SUCCESS = new ItemState(
         "a",
         "16-em-check.png"
     );
+
+    /**
+     * Pre-pipeline "ready / approved" indicator: the row has been parsed,
+     * matched, and is staged to be processed, but no work has started on
+     * it yet.  Distinct from {@link #COMPLETED} (post-pipeline) so the
+     * user can tell at a glance which rows are still waiting versus which
+     * have been fully renamed/tagged/merged.  Solid green circle = "go".
+     */
+    public static final ItemState READY = new ItemState(
+        "a2",
+        "16-circle-green.png"
+    );
+
     public static final ItemState OPTIONS = new ItemState(
         "b",
         "16-circle-green-add.png"
@@ -63,7 +82,9 @@ public class ItemState {
         "16-video-rect.png"
     );
 
-    public static final ItemState FAIL = new ItemState("f", "16-em-cross.png");
+    // Solid red circle — pairs visually with READY's solid green circle so
+    // ready/error read as opposite states at a glance ("go" vs. "stop").
+    public static final ItemState FAIL = new ItemState("f", "16-circle-red.png");
 
     // Indicates a file was successfully moved/renamed.
     public static final ItemState COMPLETED = new ItemState(
@@ -73,6 +94,7 @@ public class ItemState {
 
     private static final ItemState[] STANDARD_STATUSES = {
         SUCCESS,
+        READY,
         OPTIONS,
         ADDED,
         DOWNLOADING,
