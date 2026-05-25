@@ -902,35 +902,110 @@ public class MoveRunner implements Runnable {
             return;
         }
 
-        Set<Path> destDirs = new HashSet<>();
+        // Build the candidate list strictly from the files this batch moved.
+        //
+        // Two cases produce a candidate, both bounded to the batch:
+        //   (A) a mover that moved a media-container file -- the destination
+        //       path IS the candidate.  This is the common path.
+        //   (B) a mover that moved a subtitle file (.srt/.ass/.ssa/.vtt) --
+        //       look for a media sibling at the same destination directory
+        //       whose base name + "." prefixes the subtitle's name.  This
+        //       supports the workflow "user renames a sibling .srt into a
+        //       folder that already contains the matching media, and expects
+        //       it to auto-mux."  We inverse SubtitlePairing's matching rule
+        //       and limit the directory scan to a same-base prefix check, so
+        //       unrelated files in the destination folder are never touched.
+        //
+        // Historic note: this method used to enumerate every regular file in
+        // every destination directory the batch touched, which silently
+        // processed media files that were already at the destination before
+        // the batch ran -- a real user-trust bug.  The strictly-batch scope
+        // below is the fix.
+        List<Path> candidates = new LinkedList<>();
+        Set<Path> seenCandidates = new HashSet<>();
+
         for (FileMover mover : movers) {
             Path dest = mover.getActualDestinationIfSuccess();
-            if (dest != null) {
-                Path parent = dest.getParent();
-                if (parent != null) {
-                    destDirs.add(parent);
+            if (dest == null) {
+                continue;
+            }
+            // consumedByMerge movers short-circuit without actually moving;
+            // their .getActualDestinationIfSuccess() returns the (now-deleted)
+            // source path.  Filter those out.
+            if (!Files.isRegularFile(dest)) {
+                continue;
+            }
+
+            String ext = extOf(dest);
+
+            // Case A: media-container mover -- it is itself the candidate.
+            boolean isContainer = false;
+            for (SubtitleMerger m : SHARED_MERGERS) {
+                if (m.supportsContainerExtension(ext)) {
+                    isContainer = true;
+                    break;
                 }
             }
-        }
-        if (destDirs.isEmpty()) {
-            return;
-        }
+            if (isContainer) {
+                Path normalised = dest.toAbsolutePath().normalize();
+                if (seenCandidates.add(normalised)) {
+                    candidates.add(dest);
+                }
+                continue;
+            }
 
-        // Build the candidate list up front so we can report a meaningful
-        // total to the listener.  Skip non-regular files; everything else is
-        // a candidate (the controller will filter unsupported extensions).
-        List<Path> candidates = new LinkedList<>();
-        for (Path dir : destDirs) {
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+            // Case B (niche): subtitle mover -- look for a same-base media
+            // sibling already at the destination directory.  The directory
+            // scan is bounded by the prefix check, so the only files we
+            // can touch are those whose canonical base name is a prefix of
+            // a subtitle file the user explicitly put in the batch.
+            if (!SubtitlePairing.SUPPORTED_EXTENSIONS.contains(ext)) {
+                continue;
+            }
+            Path destDir = dest.getParent();
+            if (destDir == null) {
+                continue;
+            }
+            String subNameLower = dest.getFileName().toString()
+                .toLowerCase(java.util.Locale.ROOT);
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(destDir)) {
                 for (Path entry : stream) {
-                    if (Files.isRegularFile(entry)) {
-                        candidates.add(entry);
+                    if (!Files.isRegularFile(entry)) {
+                        continue;
+                    }
+                    String entryExt = extOf(entry);
+                    boolean entryIsContainer = false;
+                    for (SubtitleMerger m : SHARED_MERGERS) {
+                        if (m.supportsContainerExtension(entryExt)) {
+                            entryIsContainer = true;
+                            break;
+                        }
+                    }
+                    if (!entryIsContainer) {
+                        continue;
+                    }
+                    String entryName = entry.getFileName().toString();
+                    String entryBaseLower = stripExt(entryName)
+                        .toLowerCase(java.util.Locale.ROOT);
+                    if (entryBaseLower.isEmpty()) {
+                        continue;
+                    }
+                    if (subNameLower.startsWith(entryBaseLower + ".")) {
+                        Path normalised = entry.toAbsolutePath().normalize();
+                        if (seenCandidates.add(normalised)) {
+                            candidates.add(entry);
+                        }
                     }
                 }
             } catch (IOException ioe) {
                 logger.log(Level.WARNING,
-                    "Could not scan destination directory for subtitle merge: " + dir, ioe);
+                    "Could not scan destination directory while pairing subtitle: "
+                        + destDir, ioe);
             }
+        }
+
+        if (candidates.isEmpty()) {
+            return;
         }
 
         // Reconcile the WorkPlan: if the actual candidate count is less than
@@ -963,22 +1038,6 @@ public class MoveRunner implements Runnable {
             Path normalisedEntry = entry.toAbsolutePath().normalize();
             if (sourceMergedDestinations.contains(normalisedEntry)) {
                 logger.fine("Post-batch skipping source-merged: " + normalisedEntry);
-                continue;
-            }
-            // Skip files whose extension isn't a media container any merger
-            // supports.  Subtitle files (.srt etc.) would otherwise reach the
-            // controller and return UNSUPPORTED — but only after firing the
-            // per-row listener (which flickers the row icon) and ticking the
-            // WorkPlan needlessly.  Pre-filtering here is cheap and clean.
-            String entryExt = extOf(entry);
-            boolean isContainer = false;
-            for (SubtitleMerger m : SHARED_MERGERS) {
-                if (m.supportsContainerExtension(entryExt)) {
-                    isContainer = true;
-                    break;
-                }
-            }
-            if (!isContainer) {
                 continue;
             }
             logger.fine("Post-batch will examine: " + normalisedEntry);
