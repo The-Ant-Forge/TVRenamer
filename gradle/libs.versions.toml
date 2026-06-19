@@ -5,7 +5,7 @@ launch4j = "4.0.0"
 spotbugs = "6.5.6"
 
 # Runtime dependencies
-swt = "3.133.0"
+swt = "3.134.0"
 
 # Test dependencies
 junit5 = "6.1.0"
