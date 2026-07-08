@@ -17,8 +17,10 @@ Excludes items already tracked in Code-Review-260210/260304/260313.
   help/index.html). The #36 rewrite found the EpisodeDb canonicalization
   itself had already been implemented — only tests remain (tracked in
   TODO.md).
-- Remaining phases: 1 (user-facing correctness), 2 (process lifecycle),
-  3 (robustness/leaks), 4 (test infrastructure), 5 (consolidation).
+- Phase 1 complete (2026-07-09): findings 3, 9, 11, 16, 19, 25, 43, 47, 49
+  implemented; pinning tests added for 9, 16, and 25 (suite: 350 → 356).
+- Remaining phases: 2 (process lifecycle: 1, 2, 51), 3 (robustness/leaks),
+  4 (test infrastructure), 5 (consolidation).
 
 ---
 
