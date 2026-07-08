@@ -35,6 +35,21 @@
         <li><strong>Checked</strong> - Overwrite existing files</li>
     </ul>
 
+    <h3>Recursively Add Folders</h3>
+    <p>When adding a folder, also scan its subfolders for video files.</p>
+
+    <h3>Remove Emptied Directories</h3>
+    <p>After moving files out of a folder, delete the folder if it is left empty.</p>
+
+    <h3>Preserve Modification Time</h3>
+    <p>Keep the file's original "last modified" timestamp when moving it, instead
+    of the move time. Useful for sorting by date in file managers and media servers.</p>
+
+    <h3>Delete Row After Move</h3>
+    <p>Automatically remove a file's row from the table once it has been
+    successfully processed. When unchecked, completed rows remain (with a green
+    check icon) until you press <em>Clear Completed</em>.</p>
+
     <h3>Cleanup Duplicates</h3>
     <p>After moving a video file, optionally scan for other video files that represent the same episode:</p>
     <ul>
@@ -51,6 +66,11 @@
     <h3>Rename Format String</h3>
     <p>Template for renamed filenames. See <a href="renaming.html">Renaming Files</a> for available tokens.</p>
     <p>Default: <code>%S S%0sE%0e %t</code></p>
+
+    <h3>Season Prefix</h3>
+    <p>Text used for the per-season subdirectory name (e.g. <code>Season </code>
+    produces <code>Season 1</code>, <code>Season 2</code>, &hellip;). Leave empty
+    to put all episodes directly in the show's directory.</p>
 
     <h3>Drag and Drop Tokens</h3>
     <p>Drag tokens from the list into the format field to insert them.</p>
@@ -98,6 +118,36 @@
 
     <p>See <a href="metadata-tagging.html">Metadata Tagging</a> for more details.</p>
 
+    <h2>Subtitles</h2>
+
+    <h3>Merge Sibling Subtitle Files</h3>
+    <p>Automatically embed subtitle files (<code>.srt</code>, <code>.ass</code>,
+    <code>.ssa</code>, <code>.vtt</code>) that sit next to a video file into the
+    video container as soft subtitle tracks when the file is renamed:</p>
+    <ul>
+        <li>MP4/M4V requires <a href="https://gpac.io" target="_blank">MP4Box</a> (from GPAC)</li>
+        <li>MKV requires <a href="https://mkvtoolnix.download/" target="_blank">mkvmerge</a> (from MKVToolNix)</li>
+        <li>Re-running a rename never adds duplicate language tracks</li>
+    </ul>
+
+    <h3>Default Language</h3>
+    <p>The language assigned to a merged subtitle track when the subtitle's
+    filename carries no language tag (e.g. <code>show.s01e01.srt</code> as
+    opposed to <code>show.s01e01.en.srt</code>).</p>
+
+    <h3>Delete Subtitle Files After Merge</h3>
+    <p>Once a subtitle has been successfully embedded, delete the standalone
+    subtitle file. Leave unchecked to keep both.</p>
+
+    <p>See <a href="subtitle-merge.html">Subtitle Merging</a> for full details,
+    including how subtitles are paired with episodes and per-file progress.</p>
+
+    <h2>Updates</h2>
+
+    <h3>Check for Updates</h3>
+    <p>On startup, check whether a newer TVRenamer release is available and show
+    a notification link if so. No update is ever installed automatically.</p>
+
     <h2>Show Matching</h2>
 
     <h3>Show Overrides</h3>
@@ -131,8 +181,8 @@
     <h2>Ignore Keywords</h2>
     <p>Comma-separated list of keywords. Files whose path or name contains any of these words will be
     skipped entirely and not renamed. Matching is case-insensitive.</p>
-    <p>Example: <code>sample,RARBG,YTS</code> would skip files like "show.s01e01.sample.mkv" or
-    "Movie.2024.RARBG.mp4".</p>
+    <p>Example: <code>sample,proof,extras</code> would skip files like "show.s01e01.sample.mkv" or
+    "show.s01e01.extras.mkv".</p>
     <p>The default value is <code>sample</code>, which filters out sample/preview files.</p>
 
     <hr>
