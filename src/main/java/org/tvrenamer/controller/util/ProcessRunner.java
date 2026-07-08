@@ -51,18 +51,39 @@ public final class ProcessRunner {
     }
 
     /**
+     * After the process exits, how long to wait for the drain thread to
+     * consume remaining buffered output and reach EOF.  Normally EOF arrives
+     * immediately; the bound protects against a child process the tool
+     * spawned that inherited (and holds open) the output pipe.
+     */
+    private static final long DRAIN_JOIN_AFTER_EXIT_MILLIS = 5_000L;
+
+    /**
+     * After forcibly destroying a timed-out process, how long to wait for the
+     * drain thread to observe the pipe closing and finish.
+     */
+    private static final long DRAIN_JOIN_AFTER_KILL_MILLIS = 2_000L;
+
+    /**
      * Run an external command, streaming combined stdout/stderr to the given
-     * line consumer as the process produces output.  The consumer is invoked
-     * on the calling thread (the same thread that called this method) once
-     * per output line.  Use this variant when the caller wants to react to
-     * progress or status lines in real time — e.g. parsing a percentage from
-     * tool output to drive a per-row progress label.
+     * line consumer as the process produces output.  Use this variant when
+     * the caller wants to react to progress or status lines in real time —
+     * e.g. parsing a percentage from tool output to drive a per-row progress
+     * label.
      *
-     * <p>The consumer receives every line emitted by the process; it must
-     * not block (anything slow inside the consumer pauses output draining
-     * and could starve the process if its pipe buffer fills).  Exceptions
-     * from the consumer are caught and logged at FINE so they don't kill
-     * the run.
+     * <p>The consumer is invoked on a dedicated output-drain thread (NOT the
+     * calling thread), once per output line, so it must be thread-safe.  It
+     * should also not block: anything slow inside the consumer pauses output
+     * draining and could starve the process if its pipe buffer fills.
+     * Exceptions from the consumer are caught and logged at FINE so they
+     * don't kill the run.
+     *
+     * <p>The timeout bounds the entire run.  Output is drained concurrently
+     * on the dedicated thread while this thread waits on the process itself,
+     * so a tool that hangs mid-run with its output pipe open is killed when
+     * the timeout expires.  (Previously the drain ran first, on this thread,
+     * and a hung tool blocked forever — the timeout only applied after EOF,
+     * by which point the process had almost always already exited.)
      *
      * @param command        the command and arguments
      * @param timeoutSeconds maximum time to wait for the process
@@ -80,29 +101,45 @@ public final class ProcessRunner {
 
             process = pb.start();
 
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append('\n');
-                    if (onLine != null) {
-                        try {
-                            onLine.accept(line);
-                        } catch (RuntimeException re) {
-                            logger.log(Level.FINE,
-                                "ProcessRunner line consumer threw", re);
+            // StringBuffer (not StringBuilder): the drain thread writes while
+            // this thread may read on join-timeout paths; the join itself
+            // provides the happens-before for the normal path.
+            final StringBuffer output = new StringBuffer();
+            final Process proc = process;
+            Thread drain = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append('\n');
+                        if (onLine != null) {
+                            try {
+                                onLine.accept(line);
+                            } catch (RuntimeException re) {
+                                logger.log(Level.FINE,
+                                    "ProcessRunner line consumer threw", re);
+                            }
                         }
                     }
+                } catch (IOException ioe) {
+                    // Expected when a timed-out process is destroyed: the pipe
+                    // closes under the reader.  Keep whatever was captured.
+                    logger.log(Level.FINE, "ProcessRunner drain ended early", ioe);
                 }
-            }
+            }, "tvrenamer-process-drain");
+            drain.setDaemon(true);
+            drain.start();
 
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
+                logger.warning("Process timed out after " + timeoutSeconds
+                    + "s, killing: " + command.get(0));
                 process.destroyForcibly();
+                joinQuietly(drain, DRAIN_JOIN_AFTER_KILL_MILLIS);
                 return new Result(false, -1, output.toString());
             }
 
+            joinQuietly(drain, DRAIN_JOIN_AFTER_EXIT_MILLIS);
             int exitCode = process.exitValue();
             return new Result(exitCode == 0, exitCode, output.toString());
 
@@ -117,6 +154,15 @@ public final class ProcessRunner {
             if (process != null && process.isAlive()) {
                 process.destroyForcibly();
             }
+        }
+    }
+
+    /** Bounded, interrupt-preserving join; the drain thread is daemon anyway. */
+    private static void joinQuietly(Thread thread, long millis) {
+        try {
+            thread.join(millis);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
         }
     }
 }
