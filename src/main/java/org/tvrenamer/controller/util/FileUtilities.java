@@ -507,20 +507,6 @@ public class FileUtilities {
     }
 
     /**
-     * Returns whether or not a Path is a writable directory.  The argument may be null.
-     *
-     * @param path
-     *    the path to check; may be null
-     * @return true if path names a directory that is writable by the user running this
-     *    process; false otherwise.
-     */
-    public static boolean isWritableDirectory(final Path path) {
-        return (
-            (path != null) && Files.isDirectory(path) && Files.isWritable(path)
-        );
-    }
-
-    /**
      * Takes a Path which is a directory that the user wants to write into.
      *
      * @param path

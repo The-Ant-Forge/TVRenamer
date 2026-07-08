@@ -2690,12 +2690,6 @@ public final class ResultsTable
     private final class TableSubtitleMergeListener
             implements org.tvrenamer.controller.subtitle.SubtitleMergeProgressListener {
 
-        // Total candidates and per-file counter for the bottom progress bar.
-        // The bar's max is set to totalCandidates at the start of the merge
-        // phase and selection advances by one per file as it completes.
-        private int totalCandidates = 0;
-        private int currentIndex = 0;
-
         // Per-row percentage label overlays during the merge.  Keyed by the
         // TableItem whose status cell hosts the label.  Created on
         // subtitleMergeFileStarted, updated on subtitleMergeFileProgress,
@@ -2711,11 +2705,6 @@ public final class ResultsTable
 
         @Override
         public void subtitleMergeStarted(int totalCandidates) {
-            if (display == null || display.isDisposed()) {
-                return;
-            }
-            this.totalCandidates = totalCandidates;
-            this.currentIndex = 0;
             // Bar is driven by the unified WorkPlan in ResultsTable; merge
             // ticks are issued from MoveRunner.runPostBatchSubtitleMerge.
             // No direct bar manipulation here.
@@ -2783,7 +2772,6 @@ public final class ResultsTable
             if (display == null || display.isDisposed()) {
                 return;
             }
-            currentIndex++;
             display.asyncExec(() -> {
                 TableItem item = findItemByPath(mediaFile);
                 if (item == null || item.isDisposed()) {

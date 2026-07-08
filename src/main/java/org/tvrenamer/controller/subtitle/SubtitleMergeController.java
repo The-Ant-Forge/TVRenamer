@@ -237,8 +237,6 @@ public final class SubtitleMergeController {
             }
             // Tool became unavailable between our check and the merger's; treat as NO_TOOL.
             case SKIPPED_NO_TOOL -> Result.NO_TOOL;
-            // Race: between our idempotency probe and the merger's, the file changed.
-            case SKIPPED_ALREADY_PRESENT -> Result.ALREADY_HAS_LANGUAGE;
             // Already logged by the merger; just propagate the failure.
             case FAILED -> Result.FAILED;
         };

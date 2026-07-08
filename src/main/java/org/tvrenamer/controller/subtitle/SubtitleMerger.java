@@ -70,7 +70,6 @@ public interface SubtitleMerger {
     enum MergeOutcome {
         SUCCESS,
         FAILED,
-        SKIPPED_NO_TOOL,
-        SKIPPED_ALREADY_PRESENT
+        SKIPPED_NO_TOOL
     }
 }
