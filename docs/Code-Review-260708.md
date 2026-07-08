@@ -25,8 +25,8 @@ Excludes items already tracked in Code-Review-260210/260304/260313.
 | 5  | Doc drift | Subtitle Merge Spec described an architecture two redesigns old — **resolved: both docs deleted** | High | Small | Low |
 | 6  | Concurrency | MoveRunner submits tasks before listener/WorkPlan are armed | Medium | Small | Low |
 | 7  | File I/O | Non-atomic prefs/overrides writes; corruption silently resets settings | Medium | Small | Low |
-| 8  | Security | Path sanitisation misses `..`, reserved device names, trailing dots | Medium | Small | Low |
-| 9  | Error handling | Vanished source file is a silent no-op, row never marked failed | Medium | Small | Low |
+| 8  | Security | Path sanitisation misses `..`, reserved device names, trailing dots | High | Small | Low |
+| 9  | Error handling | Vanished source file fails with no specific reason or explicit state | Low | Small | Low |
 | 10 | API contract | One 404 permanently latches "API discontinued"; no retry/backoff | Medium | Medium | Low |
 | 11 | Robustness | Exception in end-of-batch steps wedges progress bar and action button | Medium | Small | Low |
 | 12 | Concurrency | ListingsLookup uses an unbounded thread pool | Medium | Small | Low |
@@ -64,8 +64,11 @@ Excludes items already tracked in Code-Review-260210/260304/260313.
 | 44 | Performance | findItemByPath linear scan per merge progress tick | Low | Small | Low |
 | 45 | Concurrency | finishAllMoves touches widgets without disposal guards | Low | Small | Low |
 | 46 | Resource lifecycle | Dialog shell icon Image leaked per open; ownership comment wrong | Low | Small | Low |
-| 47 | Robustness | renameFiles lacks the episodeMap null guard sibling paths have | Low | Small | Low |
+| 47 | Robustness | renameFiles lacks the episodeMap null guard sibling paths have | Medium | Small | Low |
 | 48 | Progress | Cosmetic bar jumps: merge future counted, already-in-place not ticked | Low | Small | Low |
+| 49 | Correctness | Source-side merge picks first media in a group; delete-after-merge loses subs for the rest | Medium | Small | Low |
+| 50 | Correctness | Source-side merge always uses default language; filename tags may never apply | Medium | Small | Low |
+| 51 | Concurrency | Static shared single-thread executor: one stuck task stalls all later batches | Medium | Medium | Low |
 
 ---
 
@@ -171,6 +174,8 @@ REPLACE_EXISTING)`; optionally keep a `.bak` of the last good file.
 
 ### 8. Path sanitisation misses `..`, reserved device names, trailing dots/spaces
 **Files:** `StringUtils.java:18-30`, `Show.java:67`, `FileEpisode.java:838`, `UserPreferences.java:1128-1134`
+*(Upgraded Medium → High on Codex second-opinion concurrence: the traversal
+component is provider-controlled and writes outside the destination root.)*
 `sanitiseTitle` replaces `\ / : | * ? < > "` only. `Show.dirName` comes from
 the network response; a value of `..` survives and
 `destPath.resolve(dirName)` escapes the destination root — provider-controlled
@@ -181,15 +186,19 @@ aren't stripped. `seasonPrefix` is not sanitised at all (user-supplied).
 trailing dots/spaces, prefix-mangle reserved device names.
 **Impact:** Medium | **Effort:** Small | **Risk:** Low
 
-### 9. Vanished source file is a silent no-op
+### 9. Vanished source file fails with no specific reason or explicit state
 **File:** `FileMover.java:565-568`
 `if (Files.notExists(srcPath)) { logger.info(...); return; }` — no
-`setFailToMove()`, so the row keeps its prior state and `call()` returns the
-stale success flag. Combines badly with source-side merge: if the subtitle
-delete succeeds but `setConsumedByMerge(true)` is skipped by an exception, the
-subtitle's mover lands exactly here.
-**Fix:** Mark the episode failed or add a distinct "source missing" status.
-**Impact:** Medium | **Effort:** Small | **Risk:** Low
+`setFailToMove()` is called. *(Corrected per Codex verification: the episode
+still reads as a failure because `isSuccess()` returns
+`currentPathMatchesTemplate`, which stays false — so the user does see a
+generic failure, not a silent success.)* Remaining issue: the episode is never
+explicitly marked failed and carries no reason, so the failure surfaces with
+no diagnosis. Combines with source-side merge: if the subtitle delete succeeds
+but `setConsumedByMerge(true)` is skipped by an exception, the subtitle's
+mover lands exactly here.
+**Fix:** Mark the episode failed with a distinct "source missing" reason.
+**Impact:** Low | **Effort:** Small | **Risk:** Low
 
 ### 10. One 404 permanently latches "API discontinued"; no retry/backoff
 **Files:** `TheTVDBProvider.java:209-221`, `HttpConnectionHandler.java:100-101`
@@ -292,10 +301,13 @@ only in the source-side (pre-move) context.
 **Files:** `MoveRunner.java:1090,1017`, `FileMover.java:406-408`, `ResultsTable.java:2581`
 Over-tick: the post-batch loop ticks per *candidate* while `predictMergeUnits`
 counts only *paired* media — with unpaired media the bar clamps at 100% while
-merges still run. Under-tick: tag ops tick only on SUCCESS/FAILED and a failed
-move never ticks, with no retract — the bar stalls until `completeAll()` snaps
-it. The reconcile retract compares against the inflated candidate count so it
-almost never fires.
+merges still run. *(Contested by Codex second opinion and re-verified: the
+over-tick claim stands — candidate Case A at MoveRunner.java:941-954 adds
+every moved container with no pairing check, and the tick at 1088-1092 fires
+regardless of outcome; Codex had only examined Case B.)* Under-tick: tag ops
+tick only on SUCCESS/FAILED and a failed move never ticks, with no retract —
+the bar stalls until `completeAll()` snaps it. The reconcile retract compares
+against the inflated candidate count so it almost never fires.
 **Fix:** Tick only paired candidates (or retract unpaired at reconcile);
 tick/retract skipped-tag and failed-move units.
 **Impact:** Medium | **Effort:** Medium | **Risk:** Medium
@@ -539,12 +551,14 @@ app-icon Image.
 **Impact:** Low | **Effort:** Small | **Risk:** Low
 
 ### 47. renameFiles lacks the episodeMap null guard sibling paths have
-**File:** `ResultsTable.java:1200`
+**File:** `ResultsTable.java:1200-1202`
 `episodeMap.get(fileName)` unguarded (siblings `refreshDestinations`,
-`markAllSelectShowPending` guard); an externally moved file could NPE the
-action-button handler.
+`markAllSelectShowPending` guard); an externally moved file NPEs
+`episode.optionCount()` inside the action-button handler on the UI thread,
+aborting the entire rename action. *(Upgraded Low → Medium on Codex
+concurrence — the blast radius is the whole batch, not one row.)*
 **Fix:** Add the null guard.
-**Impact:** Low | **Effort:** Small | **Risk:** Low
+**Impact:** Medium | **Effort:** Small | **Risk:** Low
 
 ### 48. Cosmetic progress-bar jumps at batch start and for in-place files
 **Files:** `MoveRunner.java:89-91`, `FileMover.java:626-634`
@@ -553,6 +567,52 @@ action-button handler.
 unit. Both masked by clamping.
 **Fix:** Exclude the merge future from the count; tick the in-place path.
 **Impact:** Low | **Effort:** Small | **Risk:** Low
+
+---
+
+## Codex second-opinion additions (49-51)
+
+### 49. Source-side merge picks the first media in a group; delete-after-merge loses subtitles for the rest
+**File:** `MoveRunner.java:640-657,796-809`
+When multiple media movers share a grouping key `(destDir, canonicalBaseName)`
+— e.g. two qualities of the same episode resolving to the same desired name —
+the code comments "we merge into the first" and proceeds. With
+delete-after-merge on, the sibling subtitles are then deleted and their movers
+marked consumed, so the *other* media files in the group permanently lose
+their chance at those subtitles. A multi-media group is also a destination
+conflict in its own right; merging into an arbitrary member compounds it.
+**Fix:** Skip source-side merge (fall through to post-batch) when a group
+contains more than one media file, and log why.
+**Impact:** Medium | **Effort:** Small | **Risk:** Low
+
+### 50. Source-side merge always uses the default language; filename tags may never apply
+**File:** `MoveRunner.java:671-694,765-772`
+Source-side builds every `SubtitleEntry` with the default language; the
+comment defers tag parsing to the post-batch path — but on SUCCESS the
+destination joins the skip-set, so post-batch never re-examines that file.
+Whether real tag loss occurs depends on grouping: a subtitle whose *desired
+dest name* carries a language tag (`<base>.en.srt`) has a different canonical
+base than its media and won't group source-side (post-batch handles it with
+tag parsing intact); the exposure is subtitles whose dest name is bare but
+whose *source* name carried a tag that the rename dropped. Needs a pinning
+test to establish intended behaviour either way (ties into finding 29).
+**Fix:** Parse language tags from the subtitle's source filename in the
+source-side path (reusing `SubtitlePairing`'s token parser), or document that
+dest-name tags are the only supported tagging channel.
+**Impact:** Medium | **Effort:** Small | **Risk:** Low
+
+### 51. Static shared single-thread executor: one stuck task stalls all later batches
+**File:** `MoveRunner.java:46-47,492`
+The EXECUTOR is a static JVM-wide single thread shared by every MoveRunner
+across the app's lifetime. Combined with finding 1 (unbounded drain hang), a
+single stuck tool invocation permanently wedges not just the current batch
+but every subsequent rename the user attempts until restart — the cancel in
+`run()` interrupts the future but a thread blocked in `readLine()` on a live
+pipe does not respond to interrupts.
+**Fix:** Per-run executor (created in the constructor, shut down in `run()`'s
+finally), or a watchdog that replaces the worker thread on cancellation
+timeout. Sequence after finding 1.
+**Impact:** Medium | **Effort:** Medium | **Risk:** Low
 
 ---
 
@@ -588,13 +648,35 @@ unit. Both masked by clamping.
 
 ## Suggested implementation order
 
-1. **Correctness first, small:** 3 (sort data loss), 2 (120 s timeout), 11
-   (finally), 19 (COMPLETED downgrade), 9 (vanished source), 16 (language map),
-   15 (tagger NO_TOOL), 25 (MKV guards), 43 (mtime)
-2. **The one Medium-effort High:** 1 (ProcessRunner drain thread)
-3. **Docs batch:** 4, 5, 33, 34, 35, 36, 41, 42 (all Small)
-4. **Leaks/perf batch:** 17, 18, 22, 44, 45, 46, 21, 47
-5. **Robustness batch:** 6, 7, 8, 10, 12, 13, 23, 20, 48
-6. **Tests:** 29, 30, 31, 32 (after the code they pin has stabilised)
+*(Revised after Codex second opinion: #1 must land before or with #2 —
+relaxing the 120 s backstop while ProcessRunner's drain hang is unfixed makes
+hung tools block indefinitely. #15 must land with, or after, #20 — mapping
+missing-tool to NO_TOOL changes which tag outcomes tick, regressing the bar if
+the accounting fix hasn't landed.)*
+
+1. **Process-lifecycle pair, in this order:** 1 (ProcessRunner drain thread),
+   then 2 (120 s timeout policy), then 51 (executor blast radius)
+2. **Correctness, small:** 3 (sort data loss), 11 (finally), 19 (COMPLETED
+   downgrade), 9 (vanished-source reason), 16 (language map), 25 (MKV guards),
+   43 (mtime), 47 (null guard), 49 (multi-media group guard)
+3. **Docs batch:** 4, 33, 34, 35, 36, 41, 42 (all Small; 5 already resolved)
+4. **Leaks/perf batch:** 17, 18, 22, 44, 45, 46, 21
+5. **Robustness batch:** 6, 7, 8, 10, 12, 13, 23, 48, then 20 + 15 together
+   (tick accounting and NO_TOOL mapping are coupled)
+6. **Tests:** 29, 30, 31, 32, 50 (after the code they pin has stabilised)
 7. **Consolidation (discuss scope first):** 24 + folded 26, 27; then 28, 37,
    38, 39, 40
+
+## Codex second-opinion record
+
+The completed document was passed to OpenAI Codex (GPT-5.3) for adversarial
+verification against the code. Disposition of its nine points:
+
+- **Accepted:** finding 9 corrected and downgraded (vanished source reads as
+  failure via `isSuccess()`, not silent success); finding 8 upgraded to High;
+  finding 47 upgraded to Medium; new findings 49-51 added; two
+  implementation-order corrections applied (1 before 2; 15 coupled with 20).
+- **Rejected after re-verification:** Codex's claim that finding 20's
+  over-tick was wrong — it had only examined candidate Case B; Case A
+  (MoveRunner.java:941-954) adds every moved container unpaired, and the tick
+  at 1088-1092 fires regardless of outcome.
