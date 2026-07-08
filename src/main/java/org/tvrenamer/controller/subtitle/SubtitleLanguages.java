@@ -219,6 +219,15 @@ public final class SubtitleLanguages {
         map.put("japanese", "jpn");
         map.put("korean", "kor");
 
+        // Symmetry guarantee: every code this map can PRODUCE must also be
+        // accepted as an INPUT.  Without this, a language outside the 30-entry
+        // catalogue was one-way — "ja" mapped to "jpn", but a file tagged
+        // ".jpn.srt" was unrecognised and silently fell back to the default
+        // language, mislabelling the muxed track.
+        for (String code3 : java.util.Set.copyOf(map.values())) {
+            map.putIfAbsent(code3, code3);
+        }
+
         return Map.copyOf(map);
     }
 }

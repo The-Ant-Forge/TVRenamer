@@ -236,4 +236,38 @@ class SubtitleLanguagesTest {
             "leading hyphen leaves empty base, no match expected");
         assertFalse(SubtitleLanguages.normalizeFilenameTag("123").isPresent());
     }
+
+    // --- Symmetry: every producible output code is also a valid input ---
+
+    /**
+     * Pins the Round-4 finding #16 fix: codes the map can PRODUCE (e.g. "jpn"
+     * from "ja") must also be accepted as INPUTS.  Previously a file tagged
+     * ".jpn.srt" was unrecognised and silently fell back to the default
+     * language while ".ja.srt" worked.
+     */
+    @Test
+    void normalizeAcceptsEveryProducibleOutputCode() {
+        // The nine codes the review found were produced-but-rejected.
+        for (String code3 : new String[] {
+                "jpn", "kor", "bur", "mac", "alb", "arm", "baq", "wel", "ice" }) {
+            assertEquals(code3,
+                SubtitleLanguages.normalizeFilenameTag(code3).orElseThrow(
+                    () -> new AssertionError(code3 + " must normalize to itself")));
+        }
+    }
+
+    @Test
+    void normalizeIsIdempotent() {
+        // Whatever normalize produces, feeding it back in must be a fixpoint.
+        for (String input : new String[] {
+                "ja", "japanese", "ko", "mya", "mkd", "sqi", "hye", "eus",
+                "cym", "isl", "en", "fra", "deu", "zho", "english" }) {
+            String out = SubtitleLanguages.normalizeFilenameTag(input).orElseThrow();
+            assertEquals(out,
+                SubtitleLanguages.normalizeFilenameTag(out).orElseThrow(
+                    () -> new AssertionError(
+                        "output '" + out + "' of input '" + input
+                            + "' must itself normalize")));
+        }
+    }
 }
