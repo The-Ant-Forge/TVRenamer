@@ -102,6 +102,17 @@ public final class ResultsTable
     // so it is independent of the unnamed setData(Object) used for Combo/Link widgets.
     private static final String EPISODE_DATA_KEY = "tvrenamer.episode";
 
+    // Every named per-row data key we store on TableItems.  setSortedItem must
+    // copy ALL of these when it recreates a row during sorting, or the row
+    // silently loses its identity/state (episode back-reference, completion
+    // flags).  If you add a new setData(String, ...) key on rows, add it here.
+    private static final String[] NAMED_ROW_DATA_KEYS = {
+        EPISODE_DATA_KEY,
+        SELECT_SHOW_PENDING_KEY,
+        "tvrenamer.moveCompleted",
+        "tvrenamer.pendingAutoClear",
+    };
+
     private final UIStarter ui;
     private final Shell shell;
     private final Display display;
@@ -1198,6 +1209,13 @@ public final class ResultsTable
             if (item.getChecked()) {
                 String fileName = CURRENT_FILE_FIELD.getCellText(item);
                 final FileEpisode episode = episodeMap.get(fileName);
+                // The file may have been moved or deleted outside TVRenamer
+                // since it was added; without this guard, one stale row NPEs
+                // the whole rename action on the UI thread.
+                if (episode == null) {
+                    logger.fine("checked but no longer known: " + fileName);
+                    continue;
+                }
                 // Skip files not successfully downloaded and ready to be moved
                 if (episode.optionCount() == 0) {
                     logger.fine(
@@ -1373,6 +1391,14 @@ public final class ResultsTable
         );
         STATUS_FIELD.setCellImage(item, STATUS_FIELD.getCellImage(oldItem));
 
+        // Copy ALL named per-row data.  Losing these on sort silently breaks
+        // the row's identity: a missing episode back-reference makes
+        // findItemByPath return null (no merge icons/progress), and a lost
+        // moveCompleted flag lets an already-processed row be re-queued.
+        for (String key : NAMED_ROW_DATA_KEYS) {
+            item.setData(key, oldItem.getData(key));
+        }
+
         final Object itemData = oldItem.getData();
 
         // Although the name suggests dispose() is primarily about reclaiming system
@@ -1457,6 +1483,11 @@ public final class ResultsTable
                 }
                 FileEpisode episode = episodeMap.get(newFileName);
                 if (episode != null) {
+                    // Re-anchor the row's episode back-reference from the
+                    // model: currentLocationOf may have migrated the key, and
+                    // rows recreated during the sort must stay resolvable via
+                    // findItemByPath.
+                    item.setData(EPISODE_DATA_KEY, episode);
                     setProposedDestColumn(item, episode);
                 }
             }
@@ -2793,16 +2824,19 @@ public final class ResultsTable
                     case FAILED -> STATUS_FIELD.setCellImage(item, FAIL);
                     default -> {
                         // No-op outcomes (DISABLED, NO_SUBTITLES_FOUND, NO_TOOL,
-                        // ALREADY_HAS_LANGUAGE, UNSUPPORTED).  For source-side
-                        // merge this fires BEFORE the move, so the row's still
-                        // mid-pipeline — restore READY so the row reads as
-                        // "still pending the move/tag step" rather than "done".
-                        // For post-batch merge this fires after the move; the
-                        // move's finishMove already set COMPLETED, which we'd
-                        // briefly overwrite with READY here — but the
-                        // pendingAutoClear timer fires in milliseconds, so the
-                        // visual blip is acceptable.
-                        STATUS_FIELD.setCellImage(item, READY);
+                        // ALREADY_HAS_LANGUAGE, UNSUPPORTED).  Which icon to
+                        // restore depends on where the row is in its pipeline:
+                        // post-batch merge fires AFTER the move (finishMove
+                        // already set COMPLETED and the moveCompleted flag), so
+                        // restore COMPLETED; source-side merge fires BEFORE the
+                        // move, so READY correctly reads as "still pending the
+                        // move/tag step".  Without this distinction, with
+                        // auto-clear off, every moved file with no paired
+                        // subtitles permanently reverted from COMPLETED to the
+                        // pre-pipeline READY dot.
+                        boolean moved = Boolean.TRUE.equals(
+                            item.getData("tvrenamer.moveCompleted"));
+                        STATUS_FIELD.setCellImage(item, moved ? COMPLETED : READY);
                     }
                 }
 
