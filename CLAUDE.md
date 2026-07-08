@@ -18,15 +18,15 @@ Key files:
 - `.github/workflows/windows-build.yml` — Windows CI build + artifact uploads
 - `gradlew` / `gradlew.bat` — Gradle wrapper scripts
 
-### Dependencies (versions in `gradle/libs.versions.toml`)
+### Dependencies
 
-| Dependency | Version | Check for updates |
-|-----------|---------|-------------------|
-| SWT (win32 x86_64) | 3.133.0 | [mvnrepository](https://mvnrepository.com/artifact/org.eclipse.platform/org.eclipse.swt.win32.win32.x86_64) |
-| JUnit 5 (Jupiter) | 5.14.3 | [mvnrepository](https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter) |
-| Shadow (fat JAR) | 9.4.1 | [mvnrepository](https://mvnrepository.com/artifact/com.gradleup.shadow/shadow-gradle-plugin) |
-| SpotBugs (plugin) | 6.5.1 | [mvnrepository](https://mvnrepository.com/artifact/com.github.spotbugs/com.github.spotbugs.gradle.plugin) |
-| Launch4j (EXE) | 4.0.0 | [mvnrepository](https://mvnrepository.com/artifact/edu.sc.seis.launch4j/edu.sc.seis.launch4j.gradle.plugin) |
+**Versions live in `gradle/libs.versions.toml` — that file is the single
+source of truth; do not duplicate version numbers in docs.** The Gradle
+wrapper version is in `gradle/wrapper/gradle-wrapper.properties`.
+
+Dependencies to track for updates (Maven Central / plugins.gradle.org
+metadata): SWT (win32 x86_64), JUnit Jupiter, Shadow, SpotBugs plugin,
+Launch4j plugin, and the Gradle wrapper itself.
 
 After changing versions: `./gradlew dependencies --write-locks` to update `gradle.lockfile`.
 
@@ -35,7 +35,9 @@ After changing versions: `./gradlew dependencies --write-locks` to update `gradl
 ## Local development (Windows)
 
 ### Prerequisites
-- **Git**, **JDK 17** (CI uses Temurin 17), **Gradle wrapper** included.
+- **Git**, **JDK 21** (build.gradle enforces a JDK 21 toolchain with no
+  auto-provisioning; CI uses Temurin 21), **Gradle wrapper** included
+  (wrapper decides the Gradle version — never install Gradle separately).
 
 ### Commands (repo root, use `./gradlew` in bash)
 
@@ -72,7 +74,9 @@ Enable with `-Dtvrenamer.debug=true`. In PowerShell, quote it: `java "-Dtvrename
 In code comments, commit messages, release notes, documentation, and test data:
 - **Never use real TV show names.** Use plausible fictional names instead (e.g., "Westmark Academy", "Solar Drift", "The Quiet Ones").
 - **Never name real streaming services, studios, or media companies.** Refer generically or use fictional names.
-- **Why:** TVRenamer is a tool for organising legitimately owned media. Referencing real shows or services could imply or encourage unlawful use.
+- **Never use real release-group or piracy-scene names** in examples (ignore-keyword samples, test filenames). Use neutral tokens like `sample`, `proof`, `extras`.
+- **Exception — media-player compatibility documentation:** naming real media *players/servers* (e.g., in help pages explaining what a metadata tag or subtitle track is useful for) is allowed. That's factual interoperability documentation for legitimately owned media, not an endorsement of any content source. Keep it to player names only.
+- **Why:** TVRenamer is a tool for organising legitimately owned media. Referencing real shows, services, or scene groups could imply or encourage unlawful use.
 
 ### Balanced analysis
 When presenting options or proposals, always include downsides alongside benefits. Don't be a "yes-agent" — honest tradeoffs beat enthusiasm.
@@ -101,7 +105,8 @@ For isolated risk, use a PR: `gh pr create --fill`
 ## CI (GitHub Actions)
 
 Workflow: `.github/workflows/windows-build.yml` — triggers on push/PR to `master`/`main`.
-Runs `gradle build shadowJar createExe --info` on `windows-latest` with JDK 17 + Gradle 8.5.
+Runs `./gradlew build shadowJar createExe --info` on `windows-latest` with
+Temurin JDK 21; the Gradle version comes from the checked-in wrapper.
 
 Uploads: `TVRenamer-Windows-Exe` (EXE) and `TVRenamer-JAR` (fat JARs).
 

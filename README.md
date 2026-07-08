@@ -124,7 +124,8 @@ When reporting issues, attach `tvrenamer.log` if it exists.
 
 ### Requirements
 - Windows environment recommended (CI builds on Windows)
-- Java 17+
+- JDK 21 to build (the Gradle toolchain enforces it; the produced app still
+  runs on Java 17+)
 - Git
 
 ### Build from source
@@ -139,11 +140,14 @@ CI (GitHub Actions) runs a Windows build and uploads artifacts:
 - `TVRenamer-Windows-Exe` (`build/launch4j/TVRenamer.exe`)
 - `TVRenamer-JAR` (`build/libs/*.jar`)
 
-### Recent library/tooling updates
-Current versions are managed via Gradle version catalogs (`gradle/libs.versions.toml`).
+### Libraries and tooling
+Dependency versions are managed via the Gradle version catalog —
+**see [`gradle/libs.versions.toml`](gradle/libs.versions.toml) for current
+versions** (and `gradle/wrapper/gradle-wrapper.properties` for the Gradle
+version). Exact versions are deliberately not duplicated here.
 
 Runtime dependencies:
-- SWT (Windows x64) 3.133.0
+- SWT (Windows x64) — native UI toolkit
 - JDK built-in XML (javax.xml) and HTTP (java.net.http) APIs
 
 Optional external tools (only used when the matching feature is enabled in Preferences):
@@ -153,13 +157,11 @@ Optional external tools (only used when the matching feature is enabled in Prefe
 - mkvmerge (from MKVToolNix, mkvtoolnix.org) — MKV subtitle merging
 
 Test dependencies:
-- JUnit 5.14.3 (Jupiter)
+- JUnit (Jupiter)
 
 Build tooling:
-- Gradle 9.4.1
-- Shadow plugin 9.3.2 (GradleUp)
-- Launch4j Gradle plugin 4.0.0
-- SpotBugs plugin 6.4.8
+- Gradle (wrapper-pinned) with the Shadow (fat JAR), Launch4j (Windows EXE),
+  and SpotBugs plugins
 
 ## Contributions
 If you'd like to contribute, open a pull request against the `master` branch.
