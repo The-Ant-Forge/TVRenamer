@@ -17,9 +17,9 @@ import org.tvrenamer.controller.TheTVDBProvider;
  * ShowStore -- maps strings to Show objects.<p>
  *
  * Note that, just for a single file, we may have up to five versions of the show's "name".
- * Let's look at an example.  Say we have a file named "Cosmos, A Space Time Odyssey S01E02.mp4".
+ * Let's look at an example.  Say we have a file named "Solar Drift, A Deep Space Chronicle S01E02.mp4".
  * The first thing we do is try to extract the show name from the filename.  If we do it right,
- * we'll get "Cosmos, A Space Time Odyssey".  That string is stored as the "filenameShow" of
+ * we'll get "Solar Drift, A Deep Space Chronicle".  That string is stored as the "filenameShow" of
  * the FileEpisode.<p>
  *
  * Next, we'll want to query for that string.  But first we try to eliminate characters that
@@ -28,28 +28,28 @@ import org.tvrenamer.controller.TheTVDBProvider;
  * we don't think punctuation matters, at this point.  So we normalize the string.  Since
  * this is the text we're going to send to the provider to query for which actual show it
  * might match, I sometimes call this the "query string".  In this case, it would be
- * "cosmos a space time odyssey".<p>
+ * "solar drift a deep space chronicle".<p>
  *
- * Then, from the provider, we get back the actual show name: "Cosmos: A Spacetime Odyssey".<p>
+ * Then, from the provider, we get back the actual show name: "Solar Drift: A Deepspace Chronicle".<p>
  *
  * But this is a bit of a problem, because Windows does not allow the colon character to
- * appear in filenames.  So we "sanitise" the title to "Cosmos - A Spacetime Odyssey".
+ * appear in filenames.  So we "sanitise" the title to "Solar Drift - A Deepspace Chronicle".
  * That's four versions of the same show name.<p>
  *
  * The fifth?  We allow users to set a preference to use dots instead of spaces in the
- * filenames, which would turn this into "Cosmos-A.Spacetime.Odyssey".<p>
+ * filenames, which would turn this into "Solar.Drift-A.Deepspace.Chronicle".<p>
  *
- * (Note that I did say, "up to" five versions.  In the case of a show like "Futurama",
- * we'd likely only deal with two versions, upper-case and lower-case.  For "24", there
- * is probably just the one version.)<p>
+ * (Note that I did say, "up to" five versions.  In the case of a show like "Westmark",
+ * we'd likely only deal with two versions, upper-case and lower-case.  For a show titled
+ * just "302", there is probably just the one version.)<p>
  *
  * Once again, in table form:
  * <table summary="Versions of a show's name">
- *  <tr><td>(1) filename show</td><td>"Cosmos, A Space Time Odyssey"</td></tr>
- *  <tr><td>(2) query string</td>       <td>"cosmos a space time odyssey"</td></tr>
- *  <tr><td>(3) actual show name</td>   <td>"Cosmos: A Spacetime Odyssey"</td></tr>
- *  <tr><td>(4) sanitised name</td>     <td>"Cosmos - A Spacetime Odyssey"</td></tr>
- *  <tr><td>(5) output name</td>        <td>"Cosmos-A.Spacetime.Odyssey"</td></tr></table><p>
+ *  <tr><td>(1) filename show</td><td>"Solar Drift, A Deep Space Chronicle"</td></tr>
+ *  <tr><td>(2) query string</td>       <td>"solar drift a deep space chronicle"</td></tr>
+ *  <tr><td>(3) actual show name</td>   <td>"Solar Drift: A Deepspace Chronicle"</td></tr>
+ *  <tr><td>(4) sanitised name</td>     <td>"Solar Drift - A Deepspace Chronicle"</td></tr>
+ *  <tr><td>(5) output name</td>        <td>"Solar.Drift-A.Deepspace.Chronicle"</td></tr></table><p>
  *
  * Most of these transitions are simple string transformations, provided by
  * {@link org.tvrenamer.controller.util.StringUtils}:<ul>
@@ -72,9 +72,10 @@ import org.tvrenamer.controller.TheTVDBProvider;
  * One other small note, the "actual show name" is not necessarily the true, actual actual
  * show name.  In fact, the strings we consider as "actual show name" are expected to be
  * unique (not sure if I can say "guaranteed", that's kind of out of our hands), whereas
- * actual show names are not.  There was never a show called "Archer (2009)"; the show that
- * refers to was just called "Archer".  But The TVDB adds the date because there had been
- * a previous show called "Archer".<p>
+ * actual show names are not.  Suppose a show called "The Quiet Ones" premiered in 2009,
+ * decades after an earlier show with the same title: the provider would list the newer one
+ * as "The Quiet Ones (2009)" even though no show ever actually carried that name — the
+ * date is added purely to disambiguate.<p>
  *
  * This is true despite the fact that Shows also have a show ID, which is presumably even more
  * guaranteed to be unique.<p>
@@ -88,13 +89,14 @@ import org.tvrenamer.controller.TheTVDBProvider;
  *
  * I still must say "hope to have", because this does all depend on the idea that a show
  * is never identified by punctuation or case.  That is, if we had DIFFERENT shows, one
- * called "Cosmos: A Spacetime Odyssey" and the other called "Cosmos - A Spacetime Odyssey",
- * or the other called "Cosmos: a spacetime odyssey", we would not be able to accurately
+ * called "Solar Drift: A Deepspace Chronicle" and the other called
+ * "Solar Drift - A Deepspace Chronicle", or the other called
+ * "Solar Drift: a deepspace chronicle", we would not be able to accurately
  * tell them apart.  But it's a safe assumption that won't happen.<p>
  *
  * On the other hand, we likely DO have issues involving the non-uniqueness of a title like
- * "Archer" or "The Bullpen".  The fact that The TVDB assigns unique names to these series
- * does not necessarily help us much in doing the (2) -&gt;(3a) mapping.<p>
+ * "The Quiet Ones" or "The Bullpen".  The fact that The TVDB assigns unique names to these
+ * series does not necessarily help us much in doing the (2) -&gt;(3a) mapping.<p>
  *
  * What we might want to do in the future is make it potentially a many-to-many relation,
  * and say that calling mapStringToShow() does not necessarily pin down the exact series the file

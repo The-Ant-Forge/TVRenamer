@@ -234,8 +234,8 @@ public class MoveRunner implements Runnable {
      * @param desiredFilename
      *     the filename to which we'd move the files; this means, the part
      *     of their filepath without the directory
-     * So, for example, for "/Users/me/TV/Lost.S06E05.Lighthouse.avi",
-     * the filename would be "Lost.S06E05.Lighthouse.avi".
+     * So, for example, for "/Users/me/TV/Solar.Drift.S06E05.Aphelion.avi",
+     * the filename would be "Solar.Drift.S06E05.Aphelion.avi".
      * @param moves
      *     a list of moves, all of which must have a destination directory
      *     equivalent to destDirName, and all of which must have a source
@@ -773,13 +773,11 @@ public class MoveRunner implements Runnable {
             }
 
             // Map merger outcome to controller Result for the listener.
-            SubtitleMergeController.Result reported;
-            switch (outcome) {
-                case SUCCESS -> reported = SubtitleMergeController.Result.SUCCESS;
-                case FAILED -> reported = SubtitleMergeController.Result.FAILED;
-                case SKIPPED_NO_TOOL -> reported = SubtitleMergeController.Result.NO_TOOL;
-                default -> reported = SubtitleMergeController.Result.ALREADY_HAS_LANGUAGE;
-            }
+            final SubtitleMergeController.Result reported = switch (outcome) {
+                case SUCCESS -> SubtitleMergeController.Result.SUCCESS;
+                case FAILED -> SubtitleMergeController.Result.FAILED;
+                case SKIPPED_NO_TOOL -> SubtitleMergeController.Result.NO_TOOL;
+            };
             if (subtitleListener != null) {
                 final SubtitleMergeController.Result r = reported;
                 final Path mediaPath = mediaMover.getCurrentPath();

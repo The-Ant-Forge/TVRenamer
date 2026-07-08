@@ -22,14 +22,14 @@ public class Series extends Show {
 
     /* When going from a filename to a Series object, there's a class in the way
      * which helps avoid duplication.  If we have two files like:
-     *    "Lost.S06E05.mp4"
-     *    "Lost.S06E06.mp4"
+     *    "Solar.Drift.S06E05.mp4"
+     *    "Solar.Drift.S06E06.mp4"
      * ... they will share a common ShowName object, and therefore be mapped to
      * the same Series object.  Which is good.
      *
      * But in a case like this one:
-     *    "Real.Oneals.S01E01.avi"
-     *    "The Real O'Neals.S01E02.avi"
+     *    "Fisher.Omalleys.S01E01.avi"
+     *    "The Fisher O'Malleys.S01E02.avi"
      * ... they probably won't, because of the "The".  There will be two
      * separate ShowName objects created, one with "the" and one without.
      * But, that doesn't mean we have to create two Series objects.  Once

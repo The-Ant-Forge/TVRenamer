@@ -350,7 +350,7 @@ public class StringUtils {
         String rval = s;
 
         // The apostrophe is kind of unique, because it's usually found within a word, including
-        // in show titles: "Bob's Burgers", "The Real O'Neals", "What's Happening", "Don't Trust..."
+        // in show titles: "Fry's Diner", "The Fisher O'Malleys", "What's Left", "Don't Look..."
         // For these, replacing the apostrophe with a space confuses the database; it's much better
         // to simply remove the apostrophe.
         rval = PAT_APOSTROPHE.matcher(rval).replaceAll("");

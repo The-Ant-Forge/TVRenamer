@@ -13,20 +13,20 @@ import java.util.stream.Collectors;
  * fit in the ordering?  And TheTvDb may give two answers.  One is where it was originally aired.
  * The other is where it appears in the DVD releases.  There frequently is a difference.
  *
- * Let's look at a couple of episodes of Futurama as an example.
+ * Let's look at a couple of episodes of the fictional show "Solar Drift" as an example.
  *
  * Title                    Aired      DVD
  * =====                    ======     ======
- * A Leela of Her Own       S04E10     S03E16
- * The Why of Fry           S05E08     S04E10
+ * Aphelion                 S04E10     S03E16
+ * The Long Burn            S05E08     S04E10
  *
- * So, if you know you have "A Leela of Her Own", it could be either S04E10 or S03E16, depending
+ * So, if you know you have "Aphelion", it could be either S04E10 or S03E16, depending
  * on what ordering you want to use.
  *
  * But this program works a bit differently.  We look at the filename, and extract the season and
  * episode information.  Based on that information, we decide which episode it is, so we can
- * add the episode title to the filename.  So, the question is not, "Where does 'The Why of Fry'
- * fit in?".  It is, "What is S04E10 of Futurama?"  And as we can see, there can be two answers,
+ * add the episode title to the filename.  So, the question is not, "Where does 'The Long Burn'
+ * fit in?".  It is, "What is S04E10 of Solar Drift?"  And as we can see, there can be two answers,
  * depending on which ordering is being used.
  *
  * Theoretically, there could be more than two answers.  Even for a given ordering, the DB could
@@ -35,10 +35,10 @@ import java.util.stream.Collectors;
  *
  * We use a class called EpisodeOptions which ties together an episode and an ordering.
  * The EpisodeNumber objects are indexed into the Season; each index has a list.  So, using the
- * Futurama example, if we just added those two episodes, we'd have:
- *    Season 3:  16: {DVD: A Leela of Her Own}
- *    Season 4:  10: {DVD: The Why of Fry}, {AIR: A Leela of Her Own}
- *    Season 5:   8: {AIR: The Why of Fry}
+ * Solar Drift example, if we just added those two episodes, we'd have:
+ *    Season 3:  16: {DVD: Aphelion}
+ *    Season 4:  10: {DVD: The Long Burn}, {AIR: Aphelion}
+ *    Season 5:   8: {AIR: The Long Burn}
  *
  */
 class EpisodeOptions {

@@ -221,7 +221,7 @@ public class Constants {
     public static final String IGNORE_LABEL_TOOLTIP =
         "Comma-separated list of keywords. Files containing any of these\n" +
         "words (case-insensitive) will be skipped and not renamed.\n" +
-        "Example: sample,RARBG";
+        "Example: sample,proof,extras";
     public static final String RENAME_TOKEN_TOOLTIP =
         " - These are the possible tokens to make up the\n" +
         "   'Rename Format' below.\n" +
