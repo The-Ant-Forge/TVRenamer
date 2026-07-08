@@ -77,7 +77,7 @@ dependencies {
     // XML persistence and HTTP use JDK built-in APIs (javax.xml, java.net.http)
 
     // Testing
-    testImplementation(libs.junit5Jupiter)
+    testImplementation(libs.junitJupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

@@ -2,7 +2,8 @@
  * Minimal Gradle settings for this project.
  *
  * - Sets a stable root project name.
- * - Enables Version Catalogs (`gradle/libs.versions.toml`) via `dependencyResolutionManagement`.
+ * - The version catalog (`gradle/libs.versions.toml`) is picked up by
+ *   file-location convention; no configuration is needed here.
  *
  * Keep this file minimal to avoid surprising build behavior.
  */
