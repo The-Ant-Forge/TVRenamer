@@ -39,18 +39,16 @@ native libraries without them, delete the workaround for good; if not, restore a
 re-check on the next SWT bump.
 **Effort:** Small
 
-### Episode DB path canonicalization
-**Context:** EpisodeDb can detect two strings refer to the same file; it currently chooses not to update the stored key/path even if it knows they match.
-**Why it matters:** Normalizing paths can reduce confusion and improve deduplication, but may have pitfalls on Windows/network shares.
-
-- Source:
-  - `org.tvrenamer.model.EpisodeDb` — `currentLocationOf(...)`
-  - Note: "Though, maybe we should? TODO"
-
-**Potential follow-ups:**
-- Decide a consistent canonical form for paths (absolute+normalized vs real path)
-- Be careful with UNC/SMB edge cases where "real path" may fail or be slow
-- Add tests for path normalization behavior on Windows
+### Episode DB path canonicalization — add tests
+**Context:** The canonicalization itself has been implemented since this entry
+was written: `EpisodeDb.canonicalizeKey(...)` defines the canonical form
+(deliberately avoiding `toRealPath` — see its comment for the UNC/SMB
+rationale), and `currentLocationOf(...)` migrates non-canonical legacy keys
+and normalizes the stored key when two paths refer to the same file.
+**Remaining:** No tests cover `currentLocationOf`/`canonicalizeKey` (verified
+2026-07-09). Add unit tests for the key-migration and same-file-normalization
+paths, with Windows-specific cases (case differences, mixed separators).
+**Effort:** Small
 
 ### Parsing fallbacks and "should never happen" paths
 **Context:** Parser code contains "this should never happen" style comments indicating areas where behavior could be tightened or more explicitly treated as errors.
