@@ -709,6 +709,8 @@ Completes the code improvement opportunities document (all 24 items done).
 - **Notes:**
   - Initial scope: Windows + macOS + Linux containers `.mp4`/`.m4v` (MP4Box) and `.mkv` (mkvmerge). External tools must be on PATH; missing tools degrade gracefully (the move proceeds without merging, logged once per session).
   - Spec: `docs/Subtitle Merge Spec.md`. Plan: `docs/Subtitle Merge Plan.md`.
+    (Both docs removed 2026-07-08 after the architecture was redesigned twice —
+    the code is the source of truth; retrieve them from git history if needed.)
   - Codex-reviewed. Rejected suggestions documented at the end of the spec.
   - The two mergers ended up using different test-indirection patterns (MKV: subclass override of `runProcess`; MP4: `volatile RunOperation` field). Both work; unification is captured as a code-review-round-4 follow-up.
   - Out of scope for v1 (in `docs/TODO.md`): ffmpeg fallback for MKV when mkvmerge is missing, `.mov`/`.webm` containers, "Custom language…" dropdown entry for long-tail languages, SRT encoding detection.
@@ -741,4 +743,3 @@ Completes the code improvement opportunities document (all 24 items done).
   - `docs/Unifying Matches Spec.md`
   - `docs/Strings Spec.md`
   - `docs/Episode Chain Spec.md`
-  - `docs/Subtitle Merge Spec.md`
