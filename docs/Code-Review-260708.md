@@ -19,8 +19,15 @@ Excludes items already tracked in Code-Review-260210/260304/260313.
   TODO.md).
 - Phase 1 complete (2026-07-09): findings 3, 9, 11, 16, 19, 25, 43, 47, 49
   implemented; pinning tests added for 9, 16, and 25 (suite: 350 → 356).
-- Remaining phases: 2 (process lifecycle: 1, 2, 51), 3 (robustness/leaks),
-  4 (test infrastructure), 5 (consolidation).
+- Phase 2 complete (2026-07-09): findings 1, 2, 51 implemented in the
+  Codex-mandated order (drain fix before timeout relaxation).  ProcessRunner
+  drains on a dedicated thread with waitFor(timeout) as the primary wait;
+  MoveRunner waits untimed (fixed 120 s deadline removed); the executor is
+  per-run instead of a static JVM-wide singleton (MoveRunner.shutDown()
+  removed, Launcher hook updated).  Suite: 356 → 359; the hung-tool pinning
+  test completes in ~2 s vs 60 s pre-fix.
+- Remaining phases: 3 (robustness/leaks), 4 (test infrastructure),
+  5 (consolidation).
 
 ---
 
