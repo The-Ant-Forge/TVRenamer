@@ -19,8 +19,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.tvrenamer.controller.subtitle.SubtitleEntry;
@@ -39,11 +37,12 @@ public class MoveRunner implements Runnable {
         MoveRunner.class.getName()
     );
 
-    private static final int DEFAULT_TIMEOUT = 120;
-
     // Using a single-thread executor is intentional: moves are mostly IO-bound and we prefer correctness
-    // and predictable ordering over throughput.
-    private static final ExecutorService EXECUTOR =
+    // and predictable ordering over throughput.  The executor is PER-RUN
+    // (instance field, created in the constructor, shut down in run()'s
+    // finally): the previous static JVM-wide executor meant one stuck task
+    // wedged every subsequent rename until app restart.
+    private final ExecutorService executor =
         Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, FILE_MOVE_THREAD_LABEL);
             t.setDaemon(true);
@@ -57,7 +56,6 @@ public class MoveRunner implements Runnable {
     private final Queue<Future<Boolean>> futures = new LinkedList<>();
     private final List<FileMover> movers = new LinkedList<>();
     private final int numMoves;
-    private final int timeout;
     private ProgressUpdater updater = null;
     private SubtitleMergeProgressListener subtitleListener = null;
     private org.tvrenamer.model.WorkPlan workPlan = null;
@@ -107,7 +105,15 @@ public class MoveRunner implements Runnable {
 
                 final Future<Boolean> future = futures.remove();
                 try {
-                    Boolean success = future.get(timeout, TimeUnit.SECONDS);
+                    // Untimed wait, deliberately.  A fixed per-future deadline
+                    // (formerly 120 s) interrupted legitimate long-running work:
+                    // a large cross-filesystem copy to a NAS routinely exceeds
+                    // any fixed budget, and the source-side merge phase is one
+                    // future covering the whole batch.  Runaway *tools* are
+                    // bounded inside ProcessRunner (size-scaled timeout enforced
+                    // while draining); user cancellation arrives here as an
+                    // interrupt via requestShutdown().
+                    Boolean success = future.get();
                     logger.finer("move task returned: " + success);
                 } catch (InterruptedException ie) {
                     // Preserve interrupt status and stop processing further tasks.
@@ -116,13 +122,6 @@ public class MoveRunner implements Runnable {
                     future.cancel(true);
                     logger.warning(
                         "move runner interrupted; cancelling remaining tasks"
-                    );
-                } catch (TimeoutException te) {
-                    future.cancel(true);
-                    logger.warning(
-                        "move task timed out after " +
-                            timeout +
-                            " seconds; cancelled"
                     );
                 } catch (CancellationException ce) {
                     logger.fine("move task cancelled");
@@ -145,6 +144,11 @@ public class MoveRunner implements Runnable {
                     f.cancel(true);
                 }
             }
+            // Tear down this run's executor.  On the normal path everything
+            // has completed and this is a no-op cleanup; on the shutdown path
+            // it interrupts the in-flight task.  A wedged worker thread only
+            // affects THIS run — the next batch gets a fresh executor.
+            executor.shutdownNow();
             // Always finish the progress accounting, on every exit path —
             // normal completion, shutdown, or an unexpected throw from the
             // end-of-batch steps.  Skipping this left the bar incomplete and
@@ -445,21 +449,23 @@ public class MoveRunner implements Runnable {
 
     /**
      * Creates a MoveRunner to move all the episodes in the list, and update the progress
-     * bar, using the specified timeout.
+     * bar.
+     *
+     * <p>Individual tasks are not subject to a fixed deadline: external-tool
+     * invocations are bounded internally by ProcessRunner's size-scaled
+     * timeout, copies respond to interruption, and user cancellation arrives
+     * via {@link #requestShutdown()}.
      *
      * @param episodes a list of FileMovers to execute
      * @param updater a ProgressUpdater to be informed of our progress
-     * @param timeout the number of seconds to allow each FileMover to run, before killing it
      *
      */
     @SuppressWarnings("SameParameterValue")
     private MoveRunner(
         final List<FileMover> episodes,
-        final ProgressUpdater updater,
-        final int timeout
+        final ProgressUpdater updater
     ) {
         this.updater = updater;
-        this.timeout = timeout;
 
         // progressThread is already named/daemonized in the field initializer
 
@@ -491,7 +497,7 @@ public class MoveRunner implements Runnable {
         for (FileMover move : episodes) {
             movers.add(move);
         }
-        Future<Boolean> mergeFuture = EXECUTOR.submit(this::runSourceSideMerge);
+        Future<Boolean> mergeFuture = executor.submit(this::runSourceSideMerge);
         futures.add(mergeFuture);
 
         // Submit moves in original list order (table display order, top to bottom).
@@ -502,20 +508,20 @@ public class MoveRunner implements Runnable {
             if (verifiedDirectories.contains(moveDestDir)) {
                 move.setDirectoryPreVerified(true);
             }
-            futures.add(EXECUTOR.submit(move));
+            futures.add(executor.submit(move));
         }
         numMoves = episodes.size();
         logger.log(Level.FINE, () -> "have " + numMoves + " files to move");
     }
 
     /**
-     * Creates a MoveRunner to move all the episodes in the list, using the default timeout.
+     * Creates a MoveRunner to move all the episodes in the list.
      *
      * @param episodes a list of FileMovers to execute
      *
      */
     public MoveRunner(final List<FileMover> episodes) {
-        this(episodes, null, DEFAULT_TIMEOUT);
+        this(episodes, null);
     }
 
     /**
@@ -564,20 +570,10 @@ public class MoveRunner implements Runnable {
     }
 
     /**
-     * Shut down all the threads.
-     *
-     * This is intended for usage just in case the program wants to shut down while the
-     * moves are still running.
-     *
-     */
-    public static void shutDown() {
-        EXECUTOR.shutdownNow();
-    }
-
-    /**
      * Request that this MoveRunner stop processing further queued moves.
      * This does not guarantee that a currently running move will stop immediately,
      * but it will stop consuming further tasks and will attempt to cancel queued ones.
+     * The per-run executor is torn down by run()'s finally block.
      */
     public void requestShutdown() {
         shutdownRequested = true;

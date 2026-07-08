@@ -210,8 +210,9 @@ class Launcher {
      * Shut down any threads that we know might be running. Sadly hard-coded.
      */
     private static void tvRenamerThreadShutdown() {
-        logger.fine("Shutting down MoveRunner...");
-        MoveRunner.shutDown();
+        // MoveRunner executors are per-run daemons now: the active runner is
+        // stopped by ResultsTable.requestShutdown() on window close, and any
+        // remaining worker threads cannot block JVM exit.
         logger.fine("Cleaning up ShowStore...");
         ShowStore.cleanUp();
         logger.fine("Cleaning up ListingsLookup...");
