@@ -250,6 +250,33 @@ public class MoveTest {
         assertFalse(didMove, "FileMover.call returned true on read-only file");
     }
 
+    /**
+     * Pins Round-4 finding #9: a source file that vanished between add and
+     * rename must produce an explicit failure (call() false, episode not
+     * successful, no destination created) — not a silent no-op.
+     */
+    @Test
+    public void testFileMoverSourceVanished() {
+        setValues(tinRooster0704);
+        assertReady();
+
+        try {
+            Files.delete(srcFile);
+        } catch (IOException ioe) {
+            fail("could not delete source file to set up the test: " + srcFile);
+        }
+
+        FileMover mover = new FileMover(episode);
+        boolean didMove = mover.call();
+
+        assertFalse(didMove, "FileMover.call returned true for a vanished source");
+        assertFalse(episode.isSuccess(), "episode must not read as success");
+        assertTrue(
+            Files.notExists(expectedDest),
+            "no destination file may be created for a vanished source"
+        );
+    }
+
     static class FutureCompleter implements MoveObserver {
 
         private final CompletableFuture<Boolean> future;

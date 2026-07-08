@@ -333,12 +333,15 @@ public class FileMover implements Callable<Boolean> {
                 Files.setLastModifiedTime(actualDest, now);
             }
         } catch (IOException ioe) {
-            // The file moved, but we couldn't set mtime. Keep behavior (mark failure),
-            // but improve diagnostics.
-            setFailureAndLog(
-                actualDest,
-                actualDest,
-                "unable to set modification time",
+            // The file moved successfully; failing to adjust its timestamp is
+            // cosmetic.  Marking the episode failed here (previous behaviour)
+            // made the row show a failure for a completed move AND excluded
+            // the file from post-batch subtitle merge and duplicate filtering
+            // (getActualDestinationIfSuccess() returned null).  Common on SMB
+            // shares that reject attribute writes — warn and carry on.
+            logger.log(
+                Level.WARNING,
+                "moved " + actualDest + " but could not set modification time",
                 ioe
             );
         }
@@ -563,7 +566,15 @@ public class FileMover implements Callable<Boolean> {
     private void tryToMoveFile() {
         Path srcPath = episode.getPath();
         if (Files.notExists(srcPath)) {
-            logger.info("Path no longer exists: " + srcPath);
+            // Explicitly mark the failure so the UI has a diagnosable reason
+            // rather than a generic unexplained non-success.  (The episode
+            // would read as unsuccessful anyway, but with no cause recorded.)
+            setFailureAndLog(
+                srcPath,
+                null,
+                "source file no longer exists",
+                null
+            );
             return;
         }
 
