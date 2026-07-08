@@ -99,14 +99,9 @@ public class MoveRunner implements Runnable {
                     runPostBatchSubtitleMerge();
                     // Aggregate duplicates found by all movers before finishing.
                     aggregateDuplicates();
-                    // Force the unified progress bar to 100% to absorb any
-                    // mismatch between predicted and actual op counts.
-                    if (workPlan != null) {
-                        workPlan.completeAll();
-                    }
-                    if (updater != null) {
-                        updater.finish();
-                    }
+                    // Bar completion + updater.finish() happen unconditionally
+                    // in the finally block, so an unexpected throw from the
+                    // end-of-batch steps above can't wedge the UI.
                     return;
                 }
 
@@ -149,9 +144,16 @@ public class MoveRunner implements Runnable {
                     Future<Boolean> f = futures.remove();
                     f.cancel(true);
                 }
-                if (updater != null) {
-                    updater.finish();
-                }
+            }
+            // Always finish the progress accounting, on every exit path —
+            // normal completion, shutdown, or an unexpected throw from the
+            // end-of-batch steps.  Skipping this left the bar incomplete and
+            // the action button disabled until restart.
+            if (workPlan != null) {
+                workPlan.completeAll();
+            }
+            if (updater != null) {
+                updater.finish();
             }
         }
     }
@@ -638,6 +640,7 @@ public class MoveRunner implements Runnable {
             }
 
             FileMover mediaMover = null;
+            boolean multipleMedia = false;
             List<FileMover> subMovers = new java.util.ArrayList<>();
             for (FileMover m : group) {
                 String ext = extOf(m.getCurrentPath());
@@ -647,12 +650,24 @@ public class MoveRunner implements Runnable {
                 if (MR_SUBTITLE_EXTENSIONS.contains(ext)) {
                     subMovers.add(m);
                 } else if (mediaMover == null) {
-                    // First non-subtitle file in the group is treated as the media.
-                    // Multiple medias in one group is unusual; we merge into the first.
                     mediaMover = m;
+                } else {
+                    multipleMedia = true;
                 }
             }
             if (mediaMover == null || subMovers.isEmpty()) {
+                continue;
+            }
+            // Multiple media files sharing one canonical destination name is a
+            // destination conflict in its own right; merging the subtitles
+            // into an arbitrary member (and, with delete-after-merge, then
+            // deleting them) would permanently deny the other media files
+            // their subtitles.  Skip source-side; the post-batch fallback can
+            // still handle whichever file actually lands at the destination.
+            if (multipleMedia) {
+                logger.info("Source-side merge skipped — multiple media files"
+                    + " share canonical name '" + mediaMover.getDesiredDestName()
+                    + "'; deferring to post-batch merge");
                 continue;
             }
 
