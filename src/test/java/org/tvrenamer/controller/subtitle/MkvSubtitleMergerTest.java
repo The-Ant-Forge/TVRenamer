@@ -29,22 +29,23 @@ import org.tvrenamer.controller.util.ProcessRunner;
  * indirection seams enable that:
  *
  * <ul>
- *   <li>{@link MkvSubtitleMerger#runProcess(List, int)} is package-private and
- *       overridden by the {@link FakeMerger} subclass below.  The fake records
- *       the command list it was called with and returns canned
- *       {@link ProcessRunner.Result} values; an optional {@link Runnable}
- *       side-effect lets a test materialise a temp file before merge() inspects
- *       it.</li>
+ *   <li>Process spawning goes through the constructor-injected
+ *       {@code ProcessOps.Run} / {@code ProcessOps.Streaming} interfaces.
+ *       The {@link FakeMerger} below implements both and passes itself to a
+ *       held inner {@link MkvSubtitleMerger}; it records the command list it
+ *       was called with and returns canned {@link ProcessRunner.Result}
+ *       values.  An optional {@link IoRunnable} side-effect lets a test
+ *       materialise a temp file before merge() inspects it.</li>
  *   <li>{@link MkvSubtitleMerger#setToolPathForTesting(String)} primes the
  *       static detection cache so {@code ensureDetected()} returns true (or
  *       false) without probing PATH.  {@link #resetCaches()} resets it between
  *       tests.</li>
  * </ul>
  *
- * <p>The choice of subclass+override (rather than a {@code BiFunction} static
- * field) keeps the indirection explicit, naturally per-instance, and parallel-
- * test-safe.  Only the detection cache is static, and tests reset it both
- * before and after each method.
+ * <p>Note: the detection cache and {@code SubtitleSwap}'s move operation are
+ * static, so these tests are not safe under parallel JUnit execution (which
+ * this project does not enable).  Tests reset both statics before and after
+ * each method.
  */
 class MkvSubtitleMergerTest {
 
