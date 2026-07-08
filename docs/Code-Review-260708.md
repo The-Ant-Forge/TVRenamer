@@ -10,7 +10,15 @@ noted.
 
 Excludes items already tracked in Code-Review-260210/260304/260313.
 
-**Status:** Pending approval — no findings implemented yet.
+**Status:** Implementation in progress, following the phased order below.
+- Phase 0 complete (2026-07-09): findings 4, 5, 33, 34, 35, 36, 38, 39, 40,
+  41, 42 implemented. The #35 sweep found and fixed more instances than
+  listed (EpisodeOptions, StringUtils, the ignore-keywords tooltip, and
+  help/index.html). The #36 rewrite found the EpisodeDb canonicalization
+  itself had already been implemented — only tests remain (tracked in
+  TODO.md).
+- Remaining phases: 1 (user-facing correctness), 2 (process lifecycle),
+  3 (robustness/leaks), 4 (test infrastructure), 5 (consolidation).
 
 ---
 
