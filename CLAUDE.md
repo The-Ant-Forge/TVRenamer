@@ -154,7 +154,9 @@ Update help files (`src/main/resources/help/*.html`), README, release notes, TOD
 
 ## Code Review Phases
 
-Periodically we do a consolidation review covering all source, tests, build config, and metadata.
+We do a consolidation review covering all source, tests, build config, and
+metadata **after each major feature ships, or ~30 commits since the last
+round, whichever comes first**.
 
 ### Review Checklist
 1. **Dead code** — unused functions, classes, modules, imports, config keys
@@ -163,15 +165,26 @@ Periodically we do a consolidation review covering all source, tests, build conf
 4. **Naming & consistency** — mixed conventions, unclear names, stale comments
 5. **Error handling** — inconsistent patterns, swallowed exceptions, missing
    user-facing messages
-6. **Security** — input validation gaps, credential handling, OWASP patterns
-7. **Type safety** — missing annotations, `Any` overuse, type errors
-8. **Test gaps** — untested code paths, stale tests, missing edge cases
+6. **Security (desktop threat model)** — XML parsing hardening (XXE/doctype
+   resolution in XmlUtilities — provider responses and user-editable
+   prefs/overrides files), path handling (destination traversal, Windows
+   reserved names in generated filenames), command-line injection into
+   external tools via attacker-influenceable media filenames
+7. **Type safety (Java)** — raw types, unchecked casts, `@SuppressWarnings`
+   audit, null-contract consistency, stringly-typed keys (e.g. `setData`
+   magic strings — typos fail silently), enums vs string constants
+8. **Test gaps** — untested code paths, stale tests, missing edge cases.
+   Named checks: (a) logic trapped in the untested `view/` layer that could
+   be extracted and unit-tested; (b) recent bug fixes that shipped without a
+   regression test pinning the behaviour
 9. **Documentation drift** — specs, docstrings, or README sections that no
    longer match the code
 10. **Performance** — unnecessary work, avoidable allocations, slow patterns
 11. **Robustness** — resource leaks, missing cleanup, defensive coding gaps
 12. **Concurrency & UI thread safety** — SWT widget access from correct thread,
-    safe handoff from workers, cancellation/timeouts
+    safe handoff from workers, cancellation/timeouts. Includes a static
+    mutable state audit: caches, test seams, reset paths, cross-instance
+    leakage (detection caches in mergers/taggers, ShowStore, SubtitleSwap)
 13. **Resource lifecycle & disposal** — SWT resources (Color, Font, Image),
     streams, executors, shutdown hooks
 14. **File I/O correctness** — path normalization, encoding, atomicity,
@@ -182,7 +195,13 @@ Periodically we do a consolidation review covering all source, tests, build conf
     fail-fast on invalid config
 17. **Logging & diagnosability** — adequate debug signal, no sensitive data
     in logs, actionable error context
-18. **TODO/FIXME/HACK audit** — resolve or remove stale markers
+18. **TODO/FIXME/HACK audit** — resolve or remove stale markers; reconcile
+    TODO.md against Completed.md (resolved items must move, not linger)
+19. **External tool integration** — command-line construction safety
+    (filenames containing `:`, `=`, quotes), output-parsing resilience to
+    tool version drift (mkvmerge JSON, MP4Box -info), detection-cache
+    correctness and reset paths, process lifecycle (timeouts, stream
+    draining, orphaned children), graceful degradation when a tool is absent
 
 ### Deliverable
 A review document in `docs/` named `Code-Review-YYMMDD.md` (or similar) with:

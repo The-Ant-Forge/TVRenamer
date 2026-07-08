@@ -26,16 +26,18 @@ This document consolidates "future work" notes from the codebase. Notes are grou
 
 ## Code Reliability & Maintenance
 
-### SWT upgrade guardrail: monitor upstream fat-JAR manifest fix
-**Status:** Resolved — upgraded to SWT 3.133.0 (see `docs/Completed.md` #37).
-
-The root cause was commit `360a2702a7` (SWT PR #2054) adding a mandatory `isLoadable()` check
-that reads `SWT-OS`/`SWT-Arch` from the JAR manifest — attributes lost when Shadow merges JARs.
-Workaround: inject those attributes in `build.gradle` `shadowJar` manifest.
-
-**Remaining:** Monitor upstream issue [#2928](https://github.com/eclipse-platform/eclipse.platform.swt/issues/2928)
-for a proper fix (treating missing manifest as allowed). Once fixed, the manifest attributes
-in `build.gradle` can be removed — they're harmless but unnecessary after that.
+### Verify SWT-OS/SWT-Arch manifest workaround can be removed
+**Context:** `build.gradle`'s `shadowJar` block injects `SWT-OS`/`SWT-Arch` manifest
+attributes as a workaround for SWT's `isLoadable()` check (background in
+`docs/Completed.md` #37). Upstream issue
+[#2928](https://github.com/eclipse-platform/eclipse.platform.swt/issues/2928) was
+closed 2026-06-01, and we now ship SWT 3.134.0 (released 2026-06-05) which likely
+contains the fix.
+**Action:** Remove the two manifest attributes from `build.gradle`, run
+`./gradlew clean build shadowJar createExe`, and launch the EXE. If SWT loads its
+native libraries without them, delete the workaround for good; if not, restore and
+re-check on the next SWT bump.
+**Effort:** Small
 
 ### Episode DB path canonicalization
 **Context:** EpisodeDb can detect two strings refer to the same file; it currently chooses not to update the stored key/path even if it knows they match.
