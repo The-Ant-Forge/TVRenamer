@@ -443,6 +443,50 @@ class MkvSubtitleMergerTest {
             "temp file should be deleted after integrity gate failure");
     }
 
+    // ---------- merge: Round-4 #25 guards ----------
+
+    @Test
+    void merge_nullMediaFile_returnsFailedWithoutThrowing(@TempDir Path dir)
+            throws IOException {
+        Path sub = touch(dir.resolve("show.en.srt"), 20);
+        SubtitleEntry entry = new SubtitleEntry(sub, "eng", "English",
+            EnumSet.noneOf(Descriptor.class));
+        FakeMerger merger = new FakeMerger();
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
+
+        MergeOutcome outcome = merger.merge(null, List.of(entry));
+
+        assertSame(MergeOutcome.FAILED, outcome);
+        assertEquals(0, merger.callCount(), "no process for a null media file");
+    }
+
+    @Test
+    void merge_throwingProcessInvocation_returnsFailedAndCleansTemp(@TempDir Path dir)
+            throws IOException {
+        Path media = touch(dir.resolve("show.mkv"), 100);
+        Path sub = touch(dir.resolve("show.en.srt"), 20);
+        SubtitleEntry entry = new SubtitleEntry(sub, "eng", "English",
+            EnumSet.noneOf(Descriptor.class));
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
+
+        Path expectedTemp = dir.resolve("show.mkv.merging.mkv");
+        // Simulate a process invocation that materialises a partial temp and
+        // then throws (e.g. SecurityException from ProcessBuilder.start).
+        FakeMerger merger = new FakeMerger()
+            .withSideEffect(() -> {
+                Files.write(expectedTemp, new byte[10]);
+                throw new IOException("simulated spawn failure");
+            });
+
+        MergeOutcome outcome = merger.merge(media, List.of(entry));
+
+        assertSame(MergeOutcome.FAILED, outcome,
+            "throwing op must map to FAILED, not propagate");
+        assertFalse(Files.exists(expectedTemp),
+            "partial temp must be cleaned up when the op throws");
+        assertTrue(Files.exists(media), "source must be untouched");
+    }
+
     // ---------- Test helpers ----------
 
     /** Build a {@link ProcessRunner.Result} representing a successful run. */

@@ -204,6 +204,10 @@ public final class MkvSubtitleMerger implements SubtitleMerger {
         if (!ensureDetected()) {
             return MergeOutcome.SKIPPED_NO_TOOL;
         }
+        if (mediaFile == null) {
+            // Mirror Mp4SubtitleMerger: fail cleanly rather than NPE below.
+            return MergeOutcome.FAILED;
+        }
 
         String fileName = mediaFile.getFileName().toString();
         String ext = StringUtils.getExtension(fileName);
@@ -249,9 +253,19 @@ public final class MkvSubtitleMerger implements SubtitleMerger {
         // When no progress consumer is requested we use the original
         // non-streaming runProcess overload — keeps test fakes that only
         // override the 2-arg version working unchanged.
-        ProcessRunner.Result result = (lineSink == null)
-            ? runOp.run(cmd, timeoutSeconds)
-            : streamingOp.run(cmd, timeoutSeconds, lineSink);
+        ProcessRunner.Result result;
+        try {
+            result = (lineSink == null)
+                ? runOp.run(cmd, timeoutSeconds)
+                : streamingOp.run(cmd, timeoutSeconds, lineSink);
+        } catch (RuntimeException re) {
+            // Mirror Mp4SubtitleMerger: a throwing process invocation (e.g.
+            // SecurityException from ProcessBuilder.start) must not leak the
+            // temp file or propagate out of the merger.
+            logger.log(Level.WARNING, "mkvmerge threw while merging " + mediaFile, re);
+            tryDelete(tempFile);
+            return MergeOutcome.FAILED;
+        }
 
         if (result == null || !result.success()) {
             int exitCode = (result == null) ? -1 : result.exitCode();
