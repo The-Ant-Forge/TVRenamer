@@ -109,16 +109,22 @@ public final class BatchShowDisambiguationDialog extends Dialog {
         dialogShell = new Shell(parent, getStyle());
         dialogShell.setText(TITLE_BASE);
 
-        // Match main window icon (best-effort).
-        // We intentionally load a fresh Image here; SWT Shell takes ownership for display purposes.
-        dialogShell.setImage(
-            UIStarter.readImageFromPath(APPLICATION_ICON_PATH)
-        );
+        // Match main window icon (best-effort).  Shell.setImage does NOT take
+        // ownership — the Image must be disposed with the shell or it leaks
+        // one GDI handle per dialog open.
+        final org.eclipse.swt.graphics.Image shellIcon =
+            UIStarter.readImageFromPath(APPLICATION_ICON_PATH);
+        dialogShell.setImage(shellIcon);
 
         // Apply theme palette so controls/tables inherit dark mode styling.
         themePalette = ThemeManager.createPalette(dialogShell.getDisplay());
         ThemeManager.applyPalette(dialogShell, themePalette);
-        dialogShell.addListener(SWT.Dispose, e -> themePalette.dispose());
+        dialogShell.addListener(SWT.Dispose, e -> {
+            themePalette.dispose();
+            if (shellIcon != null && !shellIcon.isDisposed()) {
+                shellIcon.dispose();
+            }
+        });
 
         // Treat closing the window via the title-bar X as "OK" if at least one selection exists.
         // Otherwise treat it as Cancel to avoid returning an empty selection map.

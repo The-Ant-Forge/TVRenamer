@@ -102,6 +102,22 @@ public final class ResultsTable
     // so it is independent of the unnamed setData(Object) used for Combo/Link widgets.
     private static final String EPISODE_DATA_KEY = "tvrenamer.episode";
 
+    // Named per-row data keys.  Raw string literals at call sites meant a
+    // typo silently broke Clear Completed / auto-clear with no compile error.
+    private static final String MOVE_COMPLETED_KEY = "tvrenamer.moveCompleted";
+    private static final String PENDING_AUTO_CLEAR_KEY = "tvrenamer.pendingAutoClear";
+    private static final String CLEAR_COMPLETED_BUTTON_KEY = "tvrenamer.clearCompletedButton";
+    private static final String PROCESSED_LABEL_KEY = "tvrenamer.processedLabel";
+
+    // Per-row TableEditor that hosts the embedded Combo/Link control.  Stored
+    // so deleteItemControl can dispose the editor together with its control —
+    // previously only the control was disposed and orphaned editors (each
+    // holding listeners registered on the Table) accumulated for the app
+    // lifetime.  Deliberately NOT in NAMED_ROW_DATA_KEYS: setSortedItem
+    // creates a fresh editor for the recreated row rather than copying the
+    // old row's editor reference.
+    private static final String ITEM_EDITOR_KEY = "tvrenamer.itemEditor";
+
     // Every named per-row data key we store on TableItems.  setSortedItem must
     // copy ALL of these when it recreates a row during sorting, or the row
     // silently loses its identity/state (episode back-reference, completion
@@ -109,8 +125,8 @@ public final class ResultsTable
     private static final String[] NAMED_ROW_DATA_KEYS = {
         EPISODE_DATA_KEY,
         SELECT_SHOW_PENDING_KEY,
-        "tvrenamer.moveCompleted",
-        "tvrenamer.pendingAutoClear",
+        MOVE_COMPLETED_KEY,
+        PENDING_AUTO_CLEAR_KEY,
     };
 
     private final UIStarter ui;
@@ -206,7 +222,7 @@ public final class ResultsTable
 
     private void updateClearCompletedButtonEnabled() {
         // Button only exists after setupTopButtons runs; best-effort lookup.
-        Object btnObj = shell.getData("tvrenamer.clearCompletedButton");
+        Object btnObj = shell.getData(CLEAR_COMPLETED_BUTTON_KEY);
         if (!(btnObj instanceof Button)) {
             return;
         }
@@ -223,7 +239,7 @@ public final class ResultsTable
 
         boolean anyCompleted = false;
         for (final TableItem item : swtTable.getItems()) {
-            Object completed = item.getData("tvrenamer.moveCompleted");
+            Object completed = item.getData(MOVE_COMPLETED_KEY);
             if (Boolean.TRUE.equals(completed)) {
                 anyCompleted = true;
                 break;
@@ -401,6 +417,7 @@ public final class ResultsTable
         final TableEditor editor = new TableEditor(swtTable);
         editor.grabHorizontal = true;
         NEW_FILENAME_FIELD.setEditor(item, editor, combo);
+        item.setData(ITEM_EDITOR_KEY, editor);
     }
 
     /**
@@ -469,6 +486,13 @@ public final class ResultsTable
                 oldControl.dispose();
             }
         }
+        // Dispose the TableEditor along with its control: an undisposed
+        // editor keeps listeners registered on the Table forever.
+        final Object editorData = item.getData(ITEM_EDITOR_KEY);
+        if (editorData instanceof TableEditor editor) {
+            editor.dispose();
+            item.setData(ITEM_EDITOR_KEY, null);
+        }
     }
 
     /**
@@ -505,6 +529,7 @@ public final class ResultsTable
         final TableEditor editor = new TableEditor(swtTable);
         editor.grabHorizontal = true;
         NEW_FILENAME_FIELD.setEditor(item, editor, link);
+        item.setData(ITEM_EDITOR_KEY, editor);
     }
 
     /**
@@ -1224,7 +1249,7 @@ public final class ResultsTable
                     continue;
                 }
                 // Skip rows that have already been successfully processed (moved/renamed)
-                Object moveCompleted = item.getData("tvrenamer.moveCompleted");
+                Object moveCompleted = item.getData(MOVE_COMPLETED_KEY);
                 if (Boolean.TRUE.equals(moveCompleted)) {
                     logger.fine(
                         "checked but already completed: " + episode.getFilepath()
@@ -1233,7 +1258,7 @@ public final class ResultsTable
                 }
                 // Track whether this row has been successfully processed so "Clear Completed"
                 // can remove it later when auto-clear is disabled.
-                item.setData("tvrenamer.moveCompleted", Boolean.FALSE);
+                item.setData(MOVE_COMPLETED_KEY, Boolean.FALSE);
 
                 FileMover pendingMove = new FileMover(episode);
 
@@ -1401,6 +1426,13 @@ public final class ResultsTable
 
         final Object itemData = oldItem.getData();
 
+        // The old row's editor will not be reused (a fresh one is created
+        // below for the reattached control); dispose it or it leaks.
+        final Object oldEditor = oldItem.getData(ITEM_EDITOR_KEY);
+        if (oldEditor instanceof TableEditor editor) {
+            editor.dispose();
+        }
+
         // Although the name suggests dispose() is primarily about reclaiming system
         // resources, it also deletes the item from the Table.
         oldItem.dispose();
@@ -1409,6 +1441,7 @@ public final class ResultsTable
             newEditor.grabHorizontal = true;
             NEW_FILENAME_FIELD.setEditor(item, newEditor, (Control) itemData);
             item.setData(itemData);
+            item.setData(ITEM_EDITOR_KEY, newEditor);
         }
     }
 
@@ -1838,6 +1871,17 @@ public final class ResultsTable
     }
 
     void finishAllMoves() {
+        // Persist the processed-file counter once per batch (finishMove only
+        // increments the in-memory count) — even if the shell is disposed,
+        // the count should not be lost.
+        UserPreferences.store(prefs);
+
+        // Runs via asyncExec queued from the move worker (including the
+        // shutdown path); every widget access below needs the shell alive.
+        if (shell.isDisposed()) {
+            return;
+        }
+
         // Capture duplicates before clearing the mover reference.
         java.util.List<java.nio.file.Path> foundDuplicates = java.util.Collections.emptyList();
         if (activeMover != null) {
@@ -1968,14 +2012,21 @@ public final class ResultsTable
     private static final int COMPLETED_DISPLAY_DELAY_MS = 500;
 
     public void finishMove(final TableItem item, final FileEpisode episode) {
+        // Runs on the UI thread via asyncExec queued from the move worker; the
+        // window may have closed in between (close-mid-move shutdown path).
+        if (shell.isDisposed()) {
+            return;
+        }
         if (episode.isSuccess()) {
-            // Increment processed counter once per successful file operation (rename and/or move).
+            // Increment the in-memory counter per file, but do NOT persist
+            // here: writing the preferences file once per row interleaved
+            // disk writes with paint events (500-file batch = 500 writes on
+            // the UI thread).  finishAllMoves persists once per batch.
             prefs.incrementProcessedFileCount(1);
-            UserPreferences.store(prefs);
 
             // Best-effort: refresh the processed label if present.
             // (We avoid hard dependency by looking it up via shell data.)
-            Object labelObj = shell.getData("tvrenamer.processedLabel");
+            Object labelObj = shell.getData(PROCESSED_LABEL_KEY);
             if (labelObj instanceof Label label && !label.isDisposed()) {
                 label.setText("Processed: " + prefs.getProcessedFileCount());
                 label.getParent().layout(true, true);
@@ -1991,7 +2042,7 @@ public final class ResultsTable
             // for the common no-merge or source-side-merge path, COMPLETED is the final
             // state until the row is auto-cleared or the user clears the table.
             if (item != null && !item.isDisposed()) {
-                item.setData("tvrenamer.moveCompleted", Boolean.TRUE);
+                item.setData(MOVE_COMPLETED_KEY, Boolean.TRUE);
                 STATUS_FIELD.setCellImage(item, COMPLETED);
             }
 
@@ -2001,7 +2052,7 @@ public final class ResultsTable
                     // a chance to update the row.  Otherwise the row disappears
                     // before its merge state is visible.  The deferred clear is
                     // fired from the SubtitleMergeProgressListener.
-                    item.setData("tvrenamer.pendingAutoClear", Boolean.TRUE);
+                    item.setData(PENDING_AUTO_CLEAR_KEY, Boolean.TRUE);
                 } else {
                     // Brief delay so user sees the completed checkmark before row disappears.
                     display.timerExec(COMPLETED_DISPLAY_DELAY_MS, () -> {
@@ -2067,7 +2118,7 @@ public final class ResultsTable
             new GridData(SWT.END, SWT.CENTER, true, false, 1, 1)
         );
         processedLabel.setText("Processed: " + prefs.getProcessedFileCount());
-        shell.setData("tvrenamer.processedLabel", processedLabel);
+        shell.setData(PROCESSED_LABEL_KEY, processedLabel);
 
         final FileDialog fd = new FileDialog(shell, SWT.MULTI);
         final Button addFilesButton = new Button(topButtonsComposite, SWT.PUSH);
@@ -2174,7 +2225,7 @@ public final class ResultsTable
                     try {
                         for (final TableItem item : swtTable.getItems()) {
                             Object completed = item.getData(
-                                "tvrenamer.moveCompleted"
+                                MOVE_COMPLETED_KEY
                             );
                             if (Boolean.TRUE.equals(completed)) {
                                 deleteTableItem(item);
@@ -2190,7 +2241,7 @@ public final class ResultsTable
         );
 
         // Store button for later enable/disable refresh.
-        shell.setData("tvrenamer.clearCompletedButton", clearCompletedButton);
+        shell.setData(CLEAR_COMPLETED_BUTTON_KEY, clearCompletedButton);
 
         setupUpdateStuff(topButtonsComposite);
     }
@@ -2728,10 +2779,34 @@ public final class ResultsTable
         // so the existing FileMonitor-style overlay machinery is reused.
         private final java.util.Map<TableItem, FileMonitor.ProgressLabelResult>
             mergeProgressLabels = new java.util.HashMap<>();
+
+        // Path -> TableItem cache, resolved once per file in fileStarted.
+        // Progress events fire once per percentage point per file; resolving
+        // via findItemByPath there was an O(rows) scan on the UI thread per
+        // tick.  UI-thread confined (only touched inside asyncExec).
+        private final java.util.Map<Path, TableItem> mergeItemCache =
+            new java.util.HashMap<>();
+
         private final java.text.NumberFormat percentFormat =
             java.text.NumberFormat.getPercentInstance();
         {
             percentFormat.setMaximumFractionDigits(1);
+        }
+
+        private Path cacheKey(Path mediaFile) {
+            return mediaFile.toAbsolutePath().normalize();
+        }
+
+        private void disposeOverlay(FileMonitor.ProgressLabelResult overlay) {
+            if (overlay == null) {
+                return;
+            }
+            if (overlay.label() != null && !overlay.label().isDisposed()) {
+                overlay.label().dispose();
+            }
+            if (overlay.editor() != null) {
+                overlay.editor().dispose();
+            }
         }
 
         @Override
@@ -2751,19 +2826,14 @@ public final class ResultsTable
                 if (item == null || item.isDisposed()) {
                     return;
                 }
+                // Cache the resolution so per-percentage-point progress events
+                // don't rescan the table.
+                mergeItemCache.put(cacheKey(mediaFile), item);
                 STATUS_FIELD.setCellImage(item, MERGING);
                 // Create a percentage overlay on the status cell.  It will
                 // be updated by subtitleMergeFileProgress and disposed by
                 // subtitleMergeFileFinished.
-                FileMonitor.ProgressLabelResult prev = mergeProgressLabels.remove(item);
-                if (prev != null) {
-                    if (prev.label() != null && !prev.label().isDisposed()) {
-                        prev.label().dispose();
-                    }
-                    if (prev.editor() != null) {
-                        prev.editor().dispose();
-                    }
-                }
+                disposeOverlay(mergeProgressLabels.remove(item));
                 FileMonitor.ProgressLabelResult overlay = createProgressLabel(item);
                 if (overlay != null) {
                     overlay.label().setText("0%");
@@ -2781,7 +2851,7 @@ public final class ResultsTable
             // contracts say to be permissive.
             final int pct = Math.max(0, Math.min(100, percent));
             display.asyncExec(() -> {
-                TableItem item = findItemByPath(mediaFile);
+                TableItem item = mergeItemCache.get(cacheKey(mediaFile));
                 if (item == null || item.isDisposed()) {
                     return;
                 }
@@ -2804,20 +2874,17 @@ public final class ResultsTable
                 return;
             }
             display.asyncExec(() -> {
-                TableItem item = findItemByPath(mediaFile);
+                TableItem item = mergeItemCache.remove(cacheKey(mediaFile));
+                // Tear down the percentage overlay BEFORE the disposed-item
+                // early return: the overlay Label is a child of the Table,
+                // not of the row, so it survives row deletion and previously
+                // stayed painted at its last position forever if the row
+                // disappeared mid-merge (auto-clear, Clear List).
+                if (item != null) {
+                    disposeOverlay(mergeProgressLabels.remove(item));
+                }
                 if (item == null || item.isDisposed()) {
                     return;
-                }
-                // Tear down the percentage overlay (if any) so the row's
-                // status icon becomes visible again.
-                FileMonitor.ProgressLabelResult overlay = mergeProgressLabels.remove(item);
-                if (overlay != null) {
-                    if (overlay.label() != null && !overlay.label().isDisposed()) {
-                        overlay.label().dispose();
-                    }
-                    if (overlay.editor() != null) {
-                        overlay.editor().dispose();
-                    }
                 }
                 switch (result) {
                     case SUCCESS -> STATUS_FIELD.setCellImage(item, COMPLETED);
@@ -2835,15 +2902,15 @@ public final class ResultsTable
                         // subtitles permanently reverted from COMPLETED to the
                         // pre-pipeline READY dot.
                         boolean moved = Boolean.TRUE.equals(
-                            item.getData("tvrenamer.moveCompleted"));
+                            item.getData(MOVE_COMPLETED_KEY));
                         STATUS_FIELD.setCellImage(item, moved ? COMPLETED : READY);
                     }
                 }
 
                 // If auto-clear was deferred from finishMove, fire it now that
                 // this row's merge outcome is settled.
-                if (Boolean.TRUE.equals(item.getData("tvrenamer.pendingAutoClear"))) {
-                    item.setData("tvrenamer.pendingAutoClear", null);
+                if (Boolean.TRUE.equals(item.getData(PENDING_AUTO_CLEAR_KEY))) {
+                    item.setData(PENDING_AUTO_CLEAR_KEY, null);
                     display.timerExec(COMPLETED_DISPLAY_DELAY_MS, () -> {
                         if (!item.isDisposed()) {
                             deleteTableItem(item);
@@ -2859,6 +2926,17 @@ public final class ResultsTable
                 return;
             }
             display.asyncExec(() -> {
+                // Sweep any overlays that never got a fileFinished event
+                // (batch aborted mid-merge, listener exception) so no
+                // percentage label outlives the merge phase, then drop the
+                // item cache for the batch.
+                for (FileMonitor.ProgressLabelResult leftover
+                        : mergeProgressLabels.values()) {
+                    disposeOverlay(leftover);
+                }
+                mergeProgressLabels.clear();
+                mergeItemCache.clear();
+
                 // Sweep any rows that were left pending (e.g. media files in the
                 // destination directory that the controller didn't visit).
                 if (swtTable != null && !swtTable.isDisposed()) {
@@ -2866,8 +2944,8 @@ public final class ResultsTable
                         if (item.isDisposed()) {
                             continue;
                         }
-                        if (Boolean.TRUE.equals(item.getData("tvrenamer.pendingAutoClear"))) {
-                            item.setData("tvrenamer.pendingAutoClear", null);
+                        if (Boolean.TRUE.equals(item.getData(PENDING_AUTO_CLEAR_KEY))) {
+                            item.setData(PENDING_AUTO_CLEAR_KEY, null);
                             display.timerExec(COMPLETED_DISPLAY_DELAY_MS, () -> {
                                 if (!item.isDisposed()) {
                                     deleteTableItem(item);

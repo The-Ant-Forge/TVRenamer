@@ -112,13 +112,21 @@ public final class DuplicateCleanupDialog extends Dialog {
         dialogShell.setText(TITLE);
         dialogShell.setMinimumSize(MIN_WIDTH, MIN_HEIGHT);
 
-        // Match main window icon.
-        dialogShell.setImage(UIStarter.readImageFromPath(APPLICATION_ICON_PATH));
+        // Match main window icon.  Shell.setImage does NOT take ownership —
+        // dispose the Image with the shell or it leaks per dialog open.
+        final org.eclipse.swt.graphics.Image shellIcon =
+            UIStarter.readImageFromPath(APPLICATION_ICON_PATH);
+        dialogShell.setImage(shellIcon);
 
         // Apply theme palette for dark mode support.
         ThemePalette themePalette = ThemeManager.createPalette(dialogShell.getDisplay());
         ThemeManager.applyPalette(dialogShell, themePalette);
-        dialogShell.addListener(SWT.Dispose, e -> themePalette.dispose());
+        dialogShell.addListener(SWT.Dispose, e -> {
+            themePalette.dispose();
+            if (shellIcon != null && !shellIcon.isDisposed()) {
+                shellIcon.dispose();
+            }
+        });
 
         createContents(themePalette);
 

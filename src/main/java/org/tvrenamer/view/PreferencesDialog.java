@@ -263,6 +263,8 @@ class PreferencesDialog extends Dialog {
     // Matching validation / dirty tracking
     private static final String MATCHING_STATUS_INCOMPLETE = "Incomplete";
     private static final String MATCHING_DIRTY_KEY = "tvrenamer.matching.dirty";
+    private static final String MATCHING_VALIDATION_MESSAGE_KEY =
+        "tvrenamer.matching.validationMessage";
 
     // Status icons (reuse the same assets as the main results table).
     private static final org.eclipse.swt.graphics.Image MATCHING_ICON_OK =
@@ -1509,7 +1511,7 @@ class PreferencesDialog extends Dialog {
             );
             Object msgObj = (ti == null)
                 ? null
-                : ti.getData("tvrenamer.matching.validationMessage");
+                : ti.getData(MATCHING_VALIDATION_MESSAGE_KEY);
             String next = (msgObj == null) ? "" : msgObj.toString();
 
             // Avoid forcing layouts on every mouse move; only update when text actually changes.
@@ -1780,7 +1782,7 @@ class PreferencesDialog extends Dialog {
             );
             Object msgObj = (ti == null)
                 ? null
-                : ti.getData("tvrenamer.matching.validationMessage");
+                : ti.getData(MATCHING_VALIDATION_MESSAGE_KEY);
             String next = (msgObj == null) ? "" : msgObj.toString();
 
             // Avoid forcing layouts on every mouse move; only update when text actually changes.
@@ -2242,7 +2244,7 @@ class PreferencesDialog extends Dialog {
                     if (msg == null) {
                         msg = "";
                     }
-                    ti.setData("tvrenamer.matching.validationMessage", msg);
+                    ti.setData(MATCHING_VALIDATION_MESSAGE_KEY, msg);
 
                     // TableItem does not support tooltips; PreferencesDialog uses a shared tooltip label
                     // that is updated on hover (see Matching tab hover listener).
