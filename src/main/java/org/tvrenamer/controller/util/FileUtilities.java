@@ -3,7 +3,9 @@ package org.tvrenamer.controller.util;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
@@ -34,6 +36,39 @@ public class FileUtilities {
      */
     public static String safePath(Path p) {
         return (p == null) ? "<null>" : p.toString();
+    }
+
+    /**
+     * Write a string to a file atomically: write to a sibling temp file, then
+     * move it over the target with {@code ATOMIC_MOVE} (falling back to a
+     * plain replace where the filesystem doesn't support atomic moves).
+     *
+     * <p>Use this for files whose corruption is costly — e.g. preferences and
+     * overrides, where a truncated file is silently "recovered" by resetting
+     * the user's settings to defaults.  A crash mid-write leaves the target
+     * either fully old or fully new, never truncated.
+     *
+     * @param path    the destination file
+     * @param content the full new content
+     * @throws IOException if the temp write or the move fails
+     */
+    public static void writeStringAtomically(final Path path, final String content)
+            throws IOException {
+        Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Path tmp = (parent != null)
+            ? parent.resolve(path.getFileName() + ".tmp")
+            : Path.of(path.getFileName() + ".tmp");
+        Files.writeString(tmp, content, StandardCharsets.UTF_8);
+        try {
+            Files.move(tmp, path,
+                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException amnse) {
+            logger.fine("Atomic move unsupported for " + path + "; using plain replace");
+            Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     /**

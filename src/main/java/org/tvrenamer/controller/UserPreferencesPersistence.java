@@ -103,13 +103,11 @@ public class UserPreferencesPersistence {
         xml.append("</preferences>");
 
         try {
-            Path parent = path.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-
-            // Overwrite any existing file
-            Files.writeString(path, xml.toString(), java.nio.charset.StandardCharsets.UTF_8);
+            // Atomic temp-then-move: a crash mid-write must not leave a
+            // truncated file, because retrieve() silently "recovers" from a
+            // parse failure by resetting the user's settings to defaults.
+            org.tvrenamer.controller.util.FileUtilities
+                .writeStringAtomically(path, xml.toString());
         } catch (
             IOException
             | UnsupportedOperationException
