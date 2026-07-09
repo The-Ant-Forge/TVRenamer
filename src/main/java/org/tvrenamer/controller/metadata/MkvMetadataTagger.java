@@ -40,6 +40,20 @@ public class MkvMetadataTagger implements VideoMetadataTagger {
     private static volatile String mkvpropeditPath = null;
     private static final Object DETECTION_LOCK = new Object();
 
+    /** Reset the cached detection; tests use this to avoid probing the host PATH. */
+    static void resetDetectionForTesting() {
+        synchronized (DETECTION_LOCK) {
+            mkvpropeditPath = null;
+        }
+    }
+
+    /** Force a detection state (null = "no tool found"); tests only. */
+    static void setToolPathForTesting(String path) {
+        synchronized (DETECTION_LOCK) {
+            mkvpropeditPath = (path == null) ? "" : path;
+        }
+    }
+
     // Process timeout in seconds
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
 

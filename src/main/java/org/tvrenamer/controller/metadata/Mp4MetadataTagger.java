@@ -46,6 +46,27 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
     private static volatile Tool detectedTool = null;
     private static final Object DETECTION_LOCK = new Object();
 
+    /** Reset the cached detection; tests use this to avoid probing the host PATH. */
+    static void resetDetectionForTesting() {
+        synchronized (DETECTION_LOCK) {
+            toolPath = null;
+            detectedTool = null;
+        }
+    }
+
+    /** Force a detection state (null = "no tool found"); tests only. */
+    static void setToolPathForTesting(String path) {
+        synchronized (DETECTION_LOCK) {
+            if (path == null) {
+                toolPath = "";
+                detectedTool = Tool.NONE;
+            } else {
+                toolPath = path;
+                detectedTool = Tool.ATOMIC_PARSLEY;
+            }
+        }
+    }
+
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
 
     @Override
