@@ -732,6 +732,12 @@ Completes the code improvement opportunities document (all 24 items done).
   - Real-world live testing surfaced: a path-comparison mismatch (fixed by `Path.toAbsolutePath().normalize()`), a phantom-tick bug for `.srt` files going through the tag path (fixed by gating tag-ticks on the actual taggable result), a missing skip-set entry for the "already present" case (now also tracks the destination), and one transient missing per-row counter that was non-reproducible across multiple runs.
   - One verbose diagnostic log family (`[SOURCE-SIDE]` / `[POST-BATCH]` invocation traces) demoted to FINE level after debugging completed, so production INFO logs stay clean.
 
+### 56) Code Review Round 4 — all 51 findings resolved
+- **Why:** First consolidation review since the subtitle-merge subsystem shipped (~40 commits, never previously reviewed). Conducted with the expanded 19-category checklist (desktop threat model, Java type safety, external-tool integration) and adversarially verified by a Codex second opinion (which contributed 3 findings and 2 implementation-order corrections).
+- **Where:** `docs/Code-Review-260708.md` (findings, dispositions, phase log).
+- **What:** Implemented in five phases: docs/dead code; user-facing correctness (sort row-identity loss, language-map symmetry, COMPLETED-icon downgrade); process lifecycle (ProcessRunner drain-thread timeout enforcement, removal of the 120 s task deadline, per-run executor); robustness/leaks (atomic prefs writes, path-component hardening, 404 latch threshold + retry, TableEditor/overlay lifecycle, batched prefs persistence, exact tick accounting with tagger NO_TOOL); test infrastructure (WorkPlan/predictor/candidate-selection extractions with pinning tests, 350 → 396 tests); and the tool-integration consolidation (`DetectedTool`, shared `ProcessOps`, `AbstractSubtitleMerger`, unified `<base>.merging.<ext>` temp naming).
+- **Notes:** One CI flake shipped and was caught mid-round (the hung-process timing test; split into deterministic kill and capture tests). The source-side language-tag boundary (#50) is pinned by an explicit test rather than changed — bare subtitles merge source-side with the default language, tagged ones defer to post-batch tag parsing.
+
 ---
 
 ## Related records

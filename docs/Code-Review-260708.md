@@ -44,8 +44,18 @@ Excludes items already tracked in Code-Review-260210/260304/260313.
   parsers (parseProgressPercent), plus WorkPlan tests, merger
   swap-exhaustion tests, tagger detection hooks, and controller-test
   isolation.
-- Remaining phase: 5 (consolidation: 24, 26, 27, and the rest of 28, 37 —
-  scope to be agreed before starting).
+- Phase 5 complete (2026-07-09): findings 24, 26, 27, 28 (remainder), 37
+  implemented.  New `util.DetectedTool` (shared lazy detection cache, all
+  four tool classes adopted); `ProcessOps` promoted to `controller.util`
+  and injected into the taggers; new `AbstractSubtitleMerger` owns the
+  formerly-duplicated ~80-line merge skeleton; temp naming unified on
+  `SubtitleSwap.computeTempPath` (`<base>.merging.<ext>`, legacy MKV shape
+  still swept for one transition); extension helpers centralised in
+  StringUtils; duplicate merge logging removed with the controller test
+  pinning the non-duplication.  Suite stays at 396, all green.
+
+**ROUND 4 COMPLETE: 51 of 51 findings resolved** (finding 5 by deleting the
+stale documents; all others implemented across Phases 0-5).
 
 ---
 
