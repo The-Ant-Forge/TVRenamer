@@ -244,7 +244,10 @@ tasks.register('shadowJarVersioned', com.github.jengelman.gradle.plugins.shadow.
     destinationDirectory.set(layout.buildDirectory.dir("libs"))
 }
 
-// shadowJarVersioned is opt-in; run explicitly or via createExe when packaging.
+// shadowJarVersioned runs whenever the EXE is packaged (see the createExe
+// dependency below), so CI's `build shadowJar createExe` produces the
+// versioned jar its artifact-upload glob expects.  It remains skippable for
+// the plain `build` inner loop.
 
 sourceSets {
     main {
@@ -306,4 +309,8 @@ tasks.named('jar') {
 
 tasks.named('createExe') {
     dependsOn(tasks.named('shadowJar'))
+    // Package the versioned jar alongside the EXE: the CI workflow uploads
+    // build/libs/tvrenamer-*.jar, a glob that silently matched nothing while
+    // shadowJarVersioned was wired to no task at all.
+    dependsOn(tasks.named('shadowJarVersioned'))
 }
