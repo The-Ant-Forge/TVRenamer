@@ -35,8 +35,17 @@ Excludes items already tracked in Code-Review-260210/260304/260313.
   in TODO.md); #20's post-batch fix ticks all outcomes except
   NO_SUBTITLES_FOUND/UNSUPPORTED, which identify exactly the unpredicted
   (unpaired) candidates.  Suite: 359 → 364.
-- Remaining phases: 4 (test infrastructure: 29, 30, 31, 32, 50),
-  5 (consolidation: 24, 26, 27, 28, 37, 38-40 done earlier).
+- Phase 4 complete (2026-07-09): findings 29, 30, 31, 32, 50 implemented
+  (suite: 365 → 396).  Extractions: collectPostBatchCandidates (batch-scope
+  contract pinned with real files), predictMergeUnits over PendingMove value
+  tuples (ResultsTable delegates; its duplicate extension sets removed —
+  partial #28), sourceSideGroupKey (the #50 language-tag boundary is now an
+  explicit pinned test rather than an implicit property), both tool progress
+  parsers (parseProgressPercent), plus WorkPlan tests, merger
+  swap-exhaustion tests, tagger detection hooks, and controller-test
+  isolation.
+- Remaining phase: 5 (consolidation: 24, 26, 27, and the rest of 28, 37 —
+  scope to be agreed before starting).
 
 ---
 
