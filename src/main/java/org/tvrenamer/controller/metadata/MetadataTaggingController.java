@@ -28,6 +28,8 @@ public class MetadataTaggingController {
         DISABLED,
         /** No tagger supports this file format. */
         UNSUPPORTED,
+        /** The format is supported but the external tool is not installed. */
+        NO_TOOL,
         /** Tagging was attempted but failed. */
         FAILED;
 
@@ -36,6 +38,10 @@ public class MetadataTaggingController {
             return this != FAILED;
         }
     }
+
+    /** Once-per-session gate for the missing-tool notice (mirrors the subtitle controller). */
+    private static final java.util.concurrent.atomic.AtomicBoolean noToolLogged =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private final List<VideoMetadataTagger> taggers;
 
@@ -66,6 +72,18 @@ public class MetadataTaggingController {
 
         for (VideoMetadataTagger tagger : taggers) {
             if (tagger.supportsExtension(extension)) {
+                // Distinguish "tool missing" from success: taggers themselves
+                // return true for a missing-tool skip ("not an error"), which
+                // the boolean mapping below would report as SUCCESS — files
+                // silently went untagged with no diagnosable signal.
+                if (!tagger.isToolAvailable()) {
+                    if (noToolLogged.compareAndSet(false, true)) {
+                        logger.info(tagger.getToolName()
+                            + " not found; metadata tagging is skipped for "
+                            + extension + " files this session");
+                    }
+                    return TaggingResult.NO_TOOL;
+                }
                 logger.log(Level.FINE, () -> "Tagging " + filename + " with " + tagger.getClass().getSimpleName());
                 try {
                     return tagger.tagFile(videoFile, episode)

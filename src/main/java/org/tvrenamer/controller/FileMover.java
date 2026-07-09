@@ -115,6 +115,21 @@ public class FileMover implements Callable<Boolean> {
     }
 
     /**
+     * Whether this mover's budgeted MOVE unit has been ticked.  Every mover
+     * is predicted as exactly one move unit; call() guarantees the tick fires
+     * exactly once on every path — success, failure, or short-circuit —
+     * so a failed move can no longer stall the bar below 100%.
+     */
+    private volatile boolean moveUnitTicked = false;
+
+    private void tickMoveUnitOnce() {
+        if (!moveUnitTicked) {
+            moveUnitTicked = true;
+            tick();
+        }
+    }
+
+    /**
      * Returns duplicate video files found after this move (if cleanup preference is enabled).
      *
      * @return unmodifiable list of duplicate paths found (empty if none or preference disabled)
@@ -319,7 +334,7 @@ public class FileMover implements Callable<Boolean> {
     ) {
         // Move/rename op succeeded — tick the unified progress bar once.
         // Tag op (if it runs below) ticks separately inside tagFileIfEnabled.
-        tick();
+        tickMoveUnitOnce();
 
         try {
             if (userPrefs.isPreserveFileModificationTime()) {
@@ -401,13 +416,16 @@ public class FileMover implements Callable<Boolean> {
             if (!result.isOk()) {
                 logger.warning("Failed to tag metadata for: " + videoFile);
             }
-            // Only tick when an actual tag op was attempted.  UNSUPPORTED
-            // (e.g. .srt files) and DISABLED produce no tag work, and the
-            // WorkPlan prediction only budgets tag units for taggable
-            // extensions — so phantom ticks here would push the bar past
-            // 100% during the move phase.
+            // Only tick when a predicted tag unit was consumed.  UNSUPPORTED
+            // (e.g. .srt files) and DISABLED produce no tag work and were
+            // never budgeted — phantom ticks push the bar past 100%.
+            // NO_TOOL ticks: the file has a taggable extension, so its unit
+            // WAS predicted; the missing tool consumes it as a no-op (before
+            // NO_TOOL existed, this case reported SUCCESS and ticked, so the
+            // accounting is unchanged — just correctly labelled now).
             if (result == MetadataTaggingController.TaggingResult.SUCCESS
-                    || result == MetadataTaggingController.TaggingResult.FAILED) {
+                    || result == MetadataTaggingController.TaggingResult.FAILED
+                    || result == MetadataTaggingController.TaggingResult.NO_TOOL) {
                 tick();
             }
         } catch (Exception e) {
@@ -679,7 +697,7 @@ public class FileMover implements Callable<Boolean> {
         // finish normally so per-row UI cleanup runs.
         if (consumedByMerge) {
             episode.setAlreadyInPlace();
-            tick();
+            tickMoveUnitOnce();
             if (observer != null) {
                 observer.finishProgress(episode);
             }
@@ -696,6 +714,10 @@ public class FileMover implements Callable<Boolean> {
                 : "exception caught doing file move";
             setFailureAndLog(getCurrentPath(), destRoot, detail, e);
         } finally {
+            // Every mover was budgeted exactly one move unit; failure paths
+            // and the already-in-place path previously never ticked it,
+            // stalling the bar until completeAll() snapped it at batch end.
+            tickMoveUnitOnce();
             if (observer != null) {
                 observer.finishProgress(episode);
             }

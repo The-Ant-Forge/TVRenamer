@@ -84,7 +84,10 @@ public class MoveRunner implements Runnable {
     public void run() {
         try {
             while (!shutdownRequested) {
-                int remaining = futures.size();
+                // Clamp: the queue holds numMoves movers plus the synthetic
+                // merge future, so the raw size reads numMoves+1 on the first
+                // pass and made the bar jump.
+                int remaining = Math.min(futures.size(), numMoves);
                 if (updater != null) {
                     updater.setProgress(numMoves, remaining);
                 }
@@ -163,16 +166,31 @@ public class MoveRunner implements Runnable {
     }
 
     /**
-     * Runs the thread for this FileMover, to move all the files.
+     * Submits the work and starts the progress thread.
      *
-     * This actually could be done right in the constructor, as that is, in fact, the only
-     * way it's only currently used.  But it's nice to let it be more explicit.
-     *
+     * Submission happens here — not in the constructor — so the caller can
+     * configure the updater, subtitle listener, and WorkPlan first; the
+     * executor tasks are then guaranteed to observe those fields.
      */
     public void runThread() {
-        if (!progressThread.isAlive()) {
-            progressThread.start();
+        if (progressThread.isAlive()) {
+            return;
         }
+
+        // Source-side subtitle merge runs FIRST on the same single-thread
+        // executor.  FIFO ordering guarantees the merge completes before any
+        // per-file move starts, so when subtitle FileMovers' .call() runs
+        // they observe any consumedByMerge flags set by the merge phase.
+        futures.add(executor.submit(this::runSourceSideMerge));
+
+        // Submit moves in original list order (table display order, top to
+        // bottom).  Conflict resolution already modified the FileMovers
+        // in-place during construction.
+        for (FileMover move : movers) {
+            futures.add(executor.submit(move));
+        }
+
+        progressThread.start();
     }
 
     /**
@@ -490,25 +508,18 @@ public class MoveRunner implements Runnable {
             }
         }
 
-        // Source-side subtitle merge runs FIRST on the same single-thread executor.
-        // FIFO ordering guarantees the merge completes before any per-file move
-        // starts, so when subtitle FileMovers' .call() runs they observe any
-        // consumedByMerge flags set by the merge phase.
+        // Record the movers and pre-verification flags, but do NOT submit any
+        // work yet: submission happens in runThread(), after the caller has
+        // had the chance to arm the updater, subtitle listener, and WorkPlan.
+        // Submitting from the constructor let early tasks run with a null
+        // plan/listener (lost ticks, missing row status) with no
+        // happens-before guaranteeing they'd ever see the later writes.
         for (FileMover move : episodes) {
-            movers.add(move);
-        }
-        Future<Boolean> mergeFuture = executor.submit(this::runSourceSideMerge);
-        futures.add(mergeFuture);
-
-        // Submit moves in original list order (table display order, top to bottom).
-        // Conflict resolution has already modified the FileMover objects in-place.
-        for (FileMover move : episodes) {
-            // Mark as pre-verified if we already checked this directory.
             Path moveDestDir = move.getMoveToDirectory();
             if (verifiedDirectories.contains(moveDestDir)) {
                 move.setDirectoryPreVerified(true);
             }
-            futures.add(executor.submit(move));
+            movers.add(move);
         }
         numMoves = episodes.size();
         logger.log(Level.FINE, () -> "have " + numMoves + " files to move");
@@ -1094,9 +1105,18 @@ public class MoveRunner implements Runnable {
                 skipped++;
             }
 
-            // Tick the unified progress bar regardless of outcome — every
-            // candidate counted toward the predicted total.
-            if (workPlan != null) {
+            // Tick only when this candidate consumed a predicted merge unit.
+            // predictMergeUnits budgets one unit per PAIRED media file;
+            // NO_SUBTITLES_FOUND identifies exactly the unpaired candidates
+            // (Case A adds every moved container, paired or not), whose
+            // phantom ticks previously clamped the bar at 100% while real
+            // merges were still running.  All other outcomes — SUCCESS,
+            // FAILED, ALREADY_HAS_LANGUAGE, NO_TOOL, DISABLED — consume the
+            // budgeted unit (as a no-op where applicable).
+            boolean unpredicted =
+                result == SubtitleMergeController.Result.NO_SUBTITLES_FOUND
+                || result == SubtitleMergeController.Result.UNSUPPORTED;
+            if (workPlan != null && !unpredicted) {
                 workPlan.tick();
             }
 
