@@ -2588,14 +2588,6 @@ public final class ResultsTable
     private static final java.util.Set<String> TAGGABLE_EXTENSIONS =
         java.util.Set.of(".mp4", ".m4v", ".mov", ".mkv", ".webm");
 
-    /** Extensions accepted as media containers by the subtitle mergers. */
-    private static final java.util.Set<String> MERGEABLE_EXTENSIONS =
-        java.util.Set.of(".mp4", ".m4v", ".mkv");
-
-    /** Subtitle extensions recognised by the merger. */
-    private static final java.util.Set<String> SUBTITLE_EXTENSIONS =
-        java.util.Set.of(".srt", ".ass", ".ssa", ".vtt");
-
     /** @return extension (with leading dot, lowercased) of the given filename. */
     private static String extOf(String filename) {
         if (filename == null) {
@@ -2652,81 +2644,30 @@ public final class ResultsTable
 
     /**
      * Accurate merge-unit prediction based on the proposed canonical names.
-     *
-     * <p>Two files in the batch will pair after rename if they end up in the
-     * same destination directory and the subtitle file's base name starts
-     * with the media file's base name (which covers bare matches and
-     * language-tagged variants like {@code Show.S01E02.eng.srt}).  We count
-     * one merge unit per media file that has at least one such paired
-     * subtitle in the same destination directory.
+     * The pairing rules live in {@link org.tvrenamer.controller.MoveRunner
+     * #predictMergeUnits} (unit-tested); this wrapper applies the preference
+     * gate and maps FileMovers to the value tuples the predictor consumes.
      */
     private int predictMergeUnits(final java.util.List<org.tvrenamer.controller.FileMover> pendingMoves) {
         if (!prefs.isMergeSubtitles() || pendingMoves == null) {
             logger.fine("predictMergeUnits: merge disabled or null list");
             return 0;
         }
-        int count = 0;
-        int mediaSeen = 0;
-        int subSeen = 0;
-        for (var media : pendingMoves) {
-            if (media == null) {
+        java.util.List<org.tvrenamer.controller.MoveRunner.PendingMove> pending =
+            new java.util.ArrayList<>(pendingMoves.size());
+        for (var m : pendingMoves) {
+            if (m == null) {
                 continue;
             }
-            String mediaSrcExt = extOf(media.getCurrentPath());
-            if (!MERGEABLE_EXTENSIONS.contains(mediaSrcExt)) {
-                if (SUBTITLE_EXTENSIONS.contains(mediaSrcExt)) {
-                    subSeen++;
-                }
-                continue;
-            }
-            mediaSeen++;
-            java.nio.file.Path mediaDestDir = media.getMoveToDirectory();
-            if (mediaDestDir == null) {
-                logger.fine("predictMergeUnits: null destDir for "
-                    + media.getCurrentPath());
-                continue;
-            }
-            String mediaCanonical = media.getDesiredDestName();
-            String mediaBase = stripExt(mediaCanonical);
-            if (mediaBase.isEmpty()) {
-                logger.fine("predictMergeUnits: empty mediaBase for "
-                    + media.getCurrentPath() + " (canonical=" + mediaCanonical + ")");
-                continue;
-            }
-            // Look for any subtitle FileMover in the same destination dir
-            // whose canonical base name starts with the media's base name.
-            boolean paired = false;
-            for (var sub : pendingMoves) {
-                if (sub == null || sub == media) {
-                    continue;
-                }
-                String subSrcExt = extOf(sub.getCurrentPath());
-                if (!SUBTITLE_EXTENSIONS.contains(subSrcExt)) {
-                    continue;
-                }
-                java.nio.file.Path subDestDir = sub.getMoveToDirectory();
-                if (subDestDir == null || !subDestDir.equals(mediaDestDir)) {
-                    logger.fine("predictMergeUnits: dest dir mismatch — media="
-                        + mediaDestDir + " sub=" + subDestDir);
-                    continue;
-                }
-                String subBase = stripExt(sub.getDesiredDestName());
-                if (subBase.startsWith(mediaBase)) {
-                    paired = true;
-                    logger.fine("predictMergeUnits: pair found media="
-                        + mediaCanonical + " sub=" + sub.getDesiredDestName());
-                    break;
-                } else {
-                    logger.fine("predictMergeUnits: prefix miss — mediaBase='"
-                        + mediaBase + "' subBase='" + subBase + "'");
-                }
-            }
-            if (paired) {
-                count++;
-            }
+            pending.add(new org.tvrenamer.controller.MoveRunner.PendingMove(
+                extOf(m.getCurrentPath()),
+                m.getMoveToDirectory(),
+                stripExt(m.getDesiredDestName())
+            ));
         }
-        logger.fine("predictMergeUnits: media=" + mediaSeen + " subs=" + subSeen
-            + " paired=" + count);
+        int count = org.tvrenamer.controller.MoveRunner.predictMergeUnits(pending);
+        logger.fine("predictMergeUnits: paired=" + count
+            + " of " + pending.size() + " pending moves");
         return count;
     }
 

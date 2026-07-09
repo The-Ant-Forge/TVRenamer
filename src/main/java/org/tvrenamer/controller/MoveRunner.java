@@ -618,6 +618,91 @@ public class MoveRunner implements Runnable {
      * merge couldn't be satisfied (e.g. subtitle in a different source
      * directory than its media).
      */
+    /**
+     * Grouping key for the source-side merge phase: destination directory
+     * plus the canonical (post-rename) base name.  Media and subtitles that
+     * will share a base after rename land in one group and merge source-side.
+     *
+     * <p>Behaviour boundary this key defines (Round-4 #50): a subtitle whose
+     * desired destination name carries a language tag ({@code <base>.en.srt})
+     * has a DIFFERENT base than its media, so it does NOT group source-side —
+     * it falls through to the post-batch phase, where
+     * {@link SubtitlePairing#findFor} parses the tag.  Only bare-named
+     * subtitles ({@code <base>.srt}) merge source-side, and for those the
+     * default language is correct because there is no tag to honour.
+     *
+     * @return the grouping key, or null when the mover can't participate
+     *    (no destination directory, or an empty base name)
+     */
+    static String sourceSideGroupKey(Path destDir, String desiredDestName) {
+        if (destDir == null) {
+            return null;
+        }
+        String base = stripExt(desiredDestName);
+        if (base.isEmpty()) {
+            return null;
+        }
+        return destDir + "::" + base;
+    }
+
+    /**
+     * Value tuple for merge-unit prediction: the source extension (decides
+     * media vs subtitle), the destination directory, and the canonical
+     * post-rename base name.  Extracted from FileMover so the pairing rules
+     * the whole progress bar depends on are directly unit-testable
+     * (Round-4 #31).
+     */
+    public record PendingMove(String sourceExt, Path destDir, String destBase) {}
+
+    /**
+     * Count predicted merge units: one per media file that has at least one
+     * subtitle in the batch landing in the same destination directory whose
+     * canonical base name starts with the media's base name (covers bare
+     * matches and language-tagged variants like {@code Show.S01E02.eng.srt}).
+     */
+    public static int predictMergeUnits(List<PendingMove> pending) {
+        if (pending == null) {
+            return 0;
+        }
+        int count = 0;
+        for (PendingMove media : pending) {
+            if (media == null
+                    || !isMergeableContainer(media.sourceExt())
+                    || media.destDir() == null
+                    || media.destBase() == null
+                    || media.destBase().isEmpty()) {
+                continue;
+            }
+            for (PendingMove sub : pending) {
+                if (sub == null || sub == media) {
+                    continue;
+                }
+                if (!MR_SUBTITLE_EXTENSIONS.contains(sub.sourceExt())) {
+                    continue;
+                }
+                if (!media.destDir().equals(sub.destDir())) {
+                    continue;
+                }
+                if (sub.destBase() != null
+                        && sub.destBase().startsWith(media.destBase())) {
+                    count++;
+                    break;
+                }
+            }
+        }
+        return count;
+    }
+
+    /** @return whether any merger accepts the given container extension. */
+    static boolean isMergeableContainer(String ext) {
+        for (SubtitleMerger m : SHARED_MERGERS) {
+            if (m.supportsContainerExtension(ext)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Boolean runSourceSideMerge() {
         UserPreferences prefs = UserPreferences.getInstance();
         if (!prefs.isMergeSubtitles()) {
@@ -629,15 +714,11 @@ public class MoveRunner implements Runnable {
         // Files that will share a base after rename land in the same group.
         Map<String, List<FileMover>> groups = new HashMap<>();
         for (FileMover m : movers) {
-            Path destDir = m.getMoveToDirectory();
-            if (destDir == null) {
+            String key = sourceSideGroupKey(
+                m.getMoveToDirectory(), m.getDesiredDestName());
+            if (key == null) {
                 continue;
             }
-            String base = stripExt(m.getDesiredDestName());
-            if (base.isEmpty()) {
-                continue;
-            }
-            String key = destDir + "::" + base;
             groups.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(m);
         }
 
@@ -916,49 +997,38 @@ public class MoveRunner implements Runnable {
      * and the merge target is the destination file (the original sibling
      * subtitle has already moved into place by this point).
      */
-    private void runPostBatchSubtitleMerge() {
-        UserPreferences prefs = UserPreferences.getInstance();
-        if (!prefs.isMergeSubtitles()) {
-            return;
-        }
-
-        // Build the candidate list strictly from the files this batch moved.
-        //
-        // Two cases produce a candidate, both bounded to the batch:
-        //   (A) a mover that moved a media-container file -- the destination
-        //       path IS the candidate.  This is the common path.
-        //   (B) a mover that moved a subtitle file (.srt/.ass/.ssa/.vtt) --
-        //       look for a media sibling at the same destination directory
-        //       whose base name + "." prefixes the subtitle's name.  This
-        //       supports the workflow "user renames a sibling .srt into a
-        //       folder that already contains the matching media, and expects
-        //       it to auto-mux."  We inverse SubtitlePairing's matching rule
-        //       and limit the directory scan to a same-base prefix check, so
-        //       unrelated files in the destination folder are never touched.
-        //
-        // Historic note: this method used to enumerate every regular file in
-        // every destination directory the batch touched, which silently
-        // processed media files that were already at the destination before
-        // the batch ran -- a real user-trust bug.  The strictly-batch scope
-        // below is the fix.
+    /**
+     * Build the post-batch merge candidate list, strictly bounded to the
+     * files this batch moved.  Two cases produce a candidate:
+     *
+     * <p>(A) a destination that is a media container — it IS the candidate;
+     * (B) a destination that is a subtitle file — media siblings at the same
+     * directory whose canonical base name + "." prefixes the subtitle's name
+     * are candidates (the "rename a .srt next to existing media" workflow).
+     *
+     * <p>Unrelated files in the destination folder are never returned:
+     * pre-fix, this enumerated every regular file in every touched directory
+     * and silently processed media the user never added (the Round-4 #3
+     * user-trust bug).  Package-private and static so tests can pin the
+     * batch-scope contract with real files (Round-4 #29).
+     *
+     * @param destinations successful destination paths of this batch's movers
+     *    (consumedByMerge movers' stale source paths are filtered by the
+     *    regular-file check)
+     * @return deduplicated candidate media paths, batch-scoped
+     */
+    static List<Path> collectPostBatchCandidates(List<Path> destinations) {
         List<Path> candidates = new LinkedList<>();
         Set<Path> seenCandidates = new HashSet<>();
 
-        for (FileMover mover : movers) {
-            Path dest = mover.getActualDestinationIfSuccess();
-            if (dest == null) {
-                continue;
-            }
-            // consumedByMerge movers short-circuit without actually moving;
-            // their .getActualDestinationIfSuccess() returns the (now-deleted)
-            // source path.  Filter those out.
-            if (!Files.isRegularFile(dest)) {
+        for (Path dest : destinations) {
+            if (dest == null || !Files.isRegularFile(dest)) {
                 continue;
             }
 
             String ext = extOf(dest);
 
-            // Case A: media-container mover -- it is itself the candidate.
+            // Case A: media-container destination -- it is itself the candidate.
             boolean isContainer = false;
             for (SubtitleMerger m : SHARED_MERGERS) {
                 if (m.supportsContainerExtension(ext)) {
@@ -974,11 +1044,11 @@ public class MoveRunner implements Runnable {
                 continue;
             }
 
-            // Case B (niche): subtitle mover -- look for a same-base media
-            // sibling already at the destination directory.  The directory
-            // scan is bounded by the prefix check, so the only files we
-            // can touch are those whose canonical base name is a prefix of
-            // a subtitle file the user explicitly put in the batch.
+            // Case B (niche): subtitle destination -- look for a same-base
+            // media sibling already at the destination directory.  The scan
+            // is bounded by the prefix check, so the only files reachable are
+            // those whose canonical base name is a prefix of a subtitle the
+            // user explicitly put in the batch.
             if (!SubtitlePairing.SUPPORTED_EXTENSIONS.contains(ext)) {
                 continue;
             }
@@ -1023,6 +1093,42 @@ public class MoveRunner implements Runnable {
                         + destDir, ioe);
             }
         }
+        return candidates;
+    }
+
+    private void runPostBatchSubtitleMerge() {
+        UserPreferences prefs = UserPreferences.getInstance();
+        if (!prefs.isMergeSubtitles()) {
+            return;
+        }
+
+        // Build the candidate list strictly from the files this batch moved.
+        //
+        // Two cases produce a candidate, both bounded to the batch:
+        //   (A) a mover that moved a media-container file -- the destination
+        //       path IS the candidate.  This is the common path.
+        //   (B) a mover that moved a subtitle file (.srt/.ass/.ssa/.vtt) --
+        //       look for a media sibling at the same destination directory
+        //       whose base name + "." prefixes the subtitle's name.  This
+        //       supports the workflow "user renames a sibling .srt into a
+        //       folder that already contains the matching media, and expects
+        //       it to auto-mux."  We inverse SubtitlePairing's matching rule
+        //       and limit the directory scan to a same-base prefix check, so
+        //       unrelated files in the destination folder are never touched.
+        //
+        // Historic note: this method used to enumerate every regular file in
+        // every destination directory the batch touched, which silently
+        // processed media files that were already at the destination before
+        // the batch ran -- a real user-trust bug.  The strictly-batch scope
+        // (collectPostBatchCandidates) is the fix.
+        List<Path> destinations = new LinkedList<>();
+        for (FileMover mover : movers) {
+            Path dest = mover.getActualDestinationIfSuccess();
+            if (dest != null) {
+                destinations.add(dest);
+            }
+        }
+        List<Path> candidates = collectPostBatchCandidates(destinations);
 
         if (candidates.isEmpty()) {
             return;
