@@ -96,6 +96,53 @@ public class StringUtilsTest {
         assertEquals("   ", replaceIllegalCharacters("   "));
     }
 
+    // ---------- sanitisePathComponent (Round-4 #8) ----------
+
+    @Test
+    public void testSanitisePathComponentBlocksTraversal() {
+        // A provider-supplied show name of ".." must never survive as a path
+        // component — resolved against the destination root it escapes it.
+        assertEquals("_", StringUtils.sanitisePathComponent(".."));
+        assertEquals("_", StringUtils.sanitisePathComponent("."));
+        assertEquals("_", StringUtils.sanitisePathComponent(""));
+        assertEquals("_", StringUtils.sanitisePathComponent("..."));
+    }
+
+    @Test
+    public void testSanitisePathComponentStripsTrailingDotsAndSpaces() {
+        // Windows silently strips trailing dots/spaces, creating a different
+        // name than the one we later look for.
+        assertEquals("Westmark Academy",
+            StringUtils.sanitisePathComponent("Westmark Academy."));
+        assertEquals("Westmark Academy",
+            StringUtils.sanitisePathComponent("Westmark Academy . . "));
+    }
+
+    @Test
+    public void testSanitisePathComponentStripsControlChars() {
+        // Tab is a control character; the interior space is not.
+        assertEquals("Solar Drift",
+            StringUtils.sanitisePathComponent("Solar\t Drift"));
+    }
+
+    @Test
+    public void testSanitisePathComponentManglesReservedDeviceNames() {
+        assertEquals("_CON", StringUtils.sanitisePathComponent("CON"));
+        assertEquals("_nul", StringUtils.sanitisePathComponent("nul"));
+        assertEquals("_COM1.backup",
+            StringUtils.sanitisePathComponent("COM1.backup"));
+        // Not reserved: base name merely starts with a reserved word.
+        assertEquals("CONSOLE", StringUtils.sanitisePathComponent("CONSOLE"));
+        assertEquals("Connie", StringUtils.sanitisePathComponent("Connie"));
+    }
+
+    @Test
+    public void testSanitisePathComponentPassesOrdinaryNames() {
+        assertEquals("Solar Drift - A Deepspace Chronicle",
+            StringUtils.sanitisePathComponent("Solar Drift - A Deepspace Chronicle"));
+        assertEquals("Season 7", StringUtils.sanitisePathComponent("Season 7"));
+    }
+
     @Test
     public void testUnquoteStringNormal() {
         assertEquals("Season ", unquoteString("\"Season \""));

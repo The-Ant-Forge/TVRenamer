@@ -47,6 +47,19 @@ public class StringUtils {
     private static final Pattern PAT_WORD_SPACE = Pattern.compile("\\b\\s+\\b");
     private static final Pattern PAT_WHITESPACE = Pattern.compile("\\s");
 
+    // ASCII control characters (plus DEL) — never valid in path components.
+    private static final Pattern PAT_CONTROL_CHARS =
+        Pattern.compile("[\\x00-\\x1F\\x7F]");
+
+    // Windows reserved device names.  A path component whose base name (the
+    // part before the first dot) matches one of these, case-insensitively,
+    // is rejected or silently redirected by Windows.
+    private static final Set<String> WINDOWS_RESERVED_NAMES = Set.of(
+        "con", "prn", "aux", "nul",
+        "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+        "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"
+    );
+
     private static final ThreadLocal<DecimalFormat> DIGITS =
         ThreadLocal.withInitial(() -> new DecimalFormat("##0"));
 
@@ -280,6 +293,47 @@ public class StringUtils {
         }
 
         return replaceIllegalCharacters(title, i, end);
+    }
+
+    /**
+     * Harden a single path component against inputs that survive character
+     * replacement but still misbehave as file or directory names:<ul>
+     * <li>ASCII control characters are stripped;</li>
+     * <li>trailing dots and spaces are removed (Windows silently strips
+     *     them, producing a different name than intended);</li>
+     * <li>{@code "."}, {@code ".."}, and empty results become {@code "_"} —
+     *     without this, a provider-supplied name of {@code ".."} resolved
+     *     against the destination root escapes it entirely;</li>
+     * <li>Windows reserved device names ({@code CON}, {@code NUL},
+     *     {@code COM1}…) are prefixed with an underscore.</li></ul>
+     *
+     * @param component a proposed single path component (no separators —
+     *    those are handled by {@link #replaceIllegalCharacters})
+     * @return a version of the component that is safe to resolve against a
+     *    parent directory
+     */
+    public static String sanitisePathComponent(final String component) {
+        String s = PAT_CONTROL_CHARS.matcher(component).replaceAll("");
+
+        int end = s.length();
+        while (end > 0
+                && (s.charAt(end - 1) == '.' || s.charAt(end - 1) == ' ')) {
+            end--;
+        }
+        s = s.substring(0, end);
+
+        if (s.isEmpty()) {
+            // Covers inputs that were entirely dots/spaces/control chars —
+            // including "." and ".." (path traversal).
+            return "_";
+        }
+
+        int dot = s.indexOf('.');
+        String base = (dot < 0) ? s : s.substring(0, dot);
+        if (WINDOWS_RESERVED_NAMES.contains(toLower(base))) {
+            return "_" + s;
+        }
+        return s;
     }
 
     /**

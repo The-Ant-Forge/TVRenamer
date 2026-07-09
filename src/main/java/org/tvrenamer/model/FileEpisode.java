@@ -835,7 +835,12 @@ public class FileEpisode {
                     "error: should not get move-to directory, do not have show!"
                 );
             } else {
-                destPath = destPath.resolve(actualShow.getDirName());
+                // Defense in depth: the dir name is sanitised at construction,
+                // but it originates from the network response, and a component
+                // like ".." resolved here would escape the destination root.
+                destPath = destPath.resolve(
+                    StringUtils.sanitisePathComponent(actualShow.getDirName())
+                );
 
                 // Now we might append the "season" directory, if the user requested it in
                 // the preferences. But, only if we actually *have* season information.
@@ -848,8 +853,12 @@ public class FileEpisode {
                             userPrefs.isSeasonPrefixLeadingZero()
                                 ? StringUtils.zeroPadTwoDigits(placement.season())
                                 : String.valueOf(placement.season());
+                        // The season prefix is user-supplied and was never
+                        // sanitised anywhere else.
                         destPath = destPath.resolve(
-                            seasonPrefix + seasonString
+                            StringUtils.sanitisePathComponent(
+                                seasonPrefix + seasonString
+                            )
                         );
                     }
                 } else {
