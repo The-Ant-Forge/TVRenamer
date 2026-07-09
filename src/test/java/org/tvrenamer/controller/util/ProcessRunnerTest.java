@@ -69,15 +69,8 @@ public class ProcessRunnerTest {
 
     // ---------- Round-4 #1: timeout enforcement while output is open ----------
 
-    /**
-     * Pins the drain-thread fix: a process that hangs mid-run while keeping
-     * its stdout pipe open must be killed when the timeout expires.  Before
-     * the fix, the output drain ran on the calling thread ahead of the
-     * timed wait, so this test would block for the full sleep (60 s).
-     */
-    @Test
-    public void testTimeoutKillsHungProcessWithOpenPipe(@TempDir Path dir)
-            throws IOException {
+    /** Compile the shared Sleeper fixture (prints "started", sleeps 60 s). */
+    private static void compileSleeper(Path dir) throws IOException {
         Path sleeper = dir.resolve("Sleeper.java");
         Files.writeString(sleeper, """
             public class Sleeper {
@@ -88,18 +81,64 @@ public class ProcessRunnerTest {
                 }
             }
             """);
+        // Precompiled so child-JVM startup is the only latency inside the
+        // timed run (the source launcher's compile step alone exceeded short
+        // timeouts on loaded CI runners).
+        ProcessRunner.Result compiled = ProcessRunner.run(
+            List.of("javac", "-d", dir.toString(), sleeper.toString()), 60
+        );
+        assertTrue(compiled.success(),
+            "test setup: javac must compile Sleeper: " + compiled.output());
+    }
+
+    /**
+     * Pins the drain-thread fix: a process that hangs mid-run while keeping
+     * its stdout pipe open must be killed when the timeout expires.  Before
+     * the fix, the output drain ran on the calling thread ahead of the timed
+     * wait, so this test would block for the full sleep (60 s).
+     *
+     * <p>Deliberately does NOT assert on captured output: with a tight
+     * timeout, whether the child got to print before the kill is a race
+     * (it lost that race on loaded CI runners).  Output capture is pinned
+     * separately below with a timeout long enough to be deterministic.
+     */
+    @Test
+    public void testTimeoutKillsHungProcessWithOpenPipe(@TempDir Path dir)
+            throws IOException {
+        compileSleeper(dir);
 
         long begin = System.nanoTime();
         ProcessRunner.Result result = ProcessRunner.run(
-            List.of("java", sleeper.toString()), 2
+            List.of("java", "-cp", dir.toString(), "Sleeper"), 2
         );
         long elapsedMillis = (System.nanoTime() - begin) / 1_000_000L;
 
         assertFalse(result.success(), "hung process must be reported as failed");
         assertEquals(-1, result.exitCode(), "timeout is reported as exit -1");
-        // Generous bound for slow CI: source-launcher compile + 2s timeout +
-        // kill/join overhead.  The essential claim is "nowhere near 60s".
+        // Generous bound for slow CI; the essential claim is "nowhere near 60s".
         assertTrue(elapsedMillis < 30_000,
+            "timeout must bound the run; took " + elapsedMillis + " ms");
+    }
+
+    /**
+     * Output produced before a timeout kill must still be captured.  The
+     * 8 s budget gives the child JVM ample time to start and print even on
+     * a loaded runner, while remaining far below the 60 s sleep — so the
+     * kill still demonstrably happens mid-hang.
+     */
+    @Test
+    public void testOutputBeforeTimeoutKillIsCaptured(@TempDir Path dir)
+            throws IOException {
+        compileSleeper(dir);
+
+        long begin = System.nanoTime();
+        ProcessRunner.Result result = ProcessRunner.run(
+            List.of("java", "-cp", dir.toString(), "Sleeper"), 8
+        );
+        long elapsedMillis = (System.nanoTime() - begin) / 1_000_000L;
+
+        assertFalse(result.success(), "hung process must be reported as failed");
+        assertTrue(elapsedMillis < 40_000,
             "timeout must bound the run; took " + elapsedMillis + " ms");
         assertTrue(result.output().contains("started"),
             "output produced before the hang must still be captured");
