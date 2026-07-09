@@ -26,8 +26,17 @@ Excludes items already tracked in Code-Review-260210/260304/260313.
   per-run instead of a static JVM-wide singleton (MoveRunner.shutDown()
   removed, Launcher hook updated).  Suite: 356 → 359; the hung-tool pinning
   test completes in ~2 s vs 60 s pre-fix.
-- Remaining phases: 3 (robustness/leaks), 4 (test infrastructure),
-  5 (consolidation).
+- Phase 3 complete (2026-07-09): findings 6, 7, 8, 10, 12, 13, 15, 17, 18,
+  20, 21, 22, 23, 44, 45, 46, 48 implemented (17 findings, 7 commits).
+  Notes: #8 deliberately hardens whole path components only (new
+  `sanitisePathComponent` at the FileEpisode resolve sites), not
+  `sanitiseTitle`, whose fragments legitimately produce empty results; #13
+  is a startup warmup thread (the in-dialog "re-detect" action is tracked
+  in TODO.md); #20's post-batch fix ticks all outcomes except
+  NO_SUBTITLES_FOUND/UNSUPPORTED, which identify exactly the unpredicted
+  (unpaired) candidates.  Suite: 359 → 364.
+- Remaining phases: 4 (test infrastructure: 29, 30, 31, 32, 50),
+  5 (consolidation: 24, 26, 27, 28, 37, 38-40 done earlier).
 
 ---
 
