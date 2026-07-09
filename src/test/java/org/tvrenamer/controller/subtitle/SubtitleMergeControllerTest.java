@@ -292,7 +292,11 @@ class SubtitleMergeControllerTest {
         assertEquals(1, mkv.capturedEntries.size());
         assertEquals(srt.getFileName().toString(),
             mkv.capturedEntries.get(0).file().getFileName().toString());
-        assertTrue(handlerHasRecord(Level.INFO, "Merged 1 subtitle track(s) into"));
+        // Round-4 #37: the success INFO is the MERGER's responsibility; the
+        // controller must not duplicate it (previously two identical lines
+        // were logged per merged file).  The fake merger here doesn't log,
+        // so no such record may exist.
+        assertFalse(handlerHasRecord(Level.INFO, "Merged 1 subtitle track"));
     }
 
     @Test

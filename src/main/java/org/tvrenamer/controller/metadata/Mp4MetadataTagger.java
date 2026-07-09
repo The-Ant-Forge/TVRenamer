@@ -41,33 +41,67 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
     /** Which external tool was detected. */
     private enum Tool { ATOMIC_PARSLEY, FFMPEG, NONE }
 
-    // Cached detection result
-    private static volatile String toolPath = null;
-    private static volatile Tool detectedTool = null;
-    private static final Object DETECTION_LOCK = new Object();
+    // Shared detection caches (Round-4 #24 consolidation), one per tool.
+    // AtomicParsley is preferred; ffmpeg is the fallback.  The lazy probes
+    // preserve the original ordering: ffmpeg is only probed when
+    // AtomicParsley is absent.
+    private static final org.tvrenamer.controller.util.DetectedTool AP_TOOL =
+        new org.tvrenamer.controller.util.DetectedTool(
+            "AtomicParsley", Mp4MetadataTagger::detectAtomicParsley);
+    private static final org.tvrenamer.controller.util.DetectedTool FFMPEG_TOOL =
+        new org.tvrenamer.controller.util.DetectedTool(
+            "ffmpeg (MP4-tagging fallback)", Mp4MetadataTagger::detectFfmpeg);
+
+    /** @return which tool tagging will use, probing lazily. */
+    private static Tool currentTool() {
+        if (AP_TOOL.isAvailable()) {
+            return Tool.ATOMIC_PARSLEY;
+        }
+        if (FFMPEG_TOOL.isAvailable()) {
+            return Tool.FFMPEG;
+        }
+        return Tool.NONE;
+    }
+
+    /** @return the active tool's path, or "" when neither is installed. */
+    private static String currentToolPath() {
+        return switch (currentTool()) {
+            case ATOMIC_PARSLEY -> AP_TOOL.path();
+            case FFMPEG -> FFMPEG_TOOL.path();
+            case NONE -> "";
+        };
+    }
 
     /** Reset the cached detection; tests use this to avoid probing the host PATH. */
     static void resetDetectionForTesting() {
-        synchronized (DETECTION_LOCK) {
-            toolPath = null;
-            detectedTool = null;
-        }
+        AP_TOOL.resetForTesting();
+        FFMPEG_TOOL.resetForTesting();
     }
 
     /** Force a detection state (null = "no tool found"); tests only. */
     static void setToolPathForTesting(String path) {
-        synchronized (DETECTION_LOCK) {
-            if (path == null) {
-                toolPath = "";
-                detectedTool = Tool.NONE;
-            } else {
-                toolPath = path;
-                detectedTool = Tool.ATOMIC_PARSLEY;
-            }
-        }
+        AP_TOOL.setForTesting(path);
+        FFMPEG_TOOL.setForTesting(null);
     }
 
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
+
+    // Process indirection (constructor-injected), mirroring the mergers:
+    // tests can now reach the tagging paths without spawning real binaries.
+    private final org.tvrenamer.controller.util.ProcessOps.Run runOp;
+
+    /** Production constructor: routes through {@link ProcessRunner}. */
+    public Mp4MetadataTagger() {
+        this(org.tvrenamer.controller.util.ProcessOps.REAL);
+    }
+
+    /** Test constructor: accepts an injected process operation. */
+    Mp4MetadataTagger(org.tvrenamer.controller.util.ProcessOps.Run runOp) {
+        if (runOp == null) {
+            throw new IllegalArgumentException("ProcessOps must not be null");
+        }
+        this.runOp = runOp;
+    }
 
     @Override
     public boolean supportsExtension(String extension) {
@@ -79,10 +113,8 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
 
     @Override
     public boolean tagFile(Path videoFile, FileEpisode episode) {
-        // Ensure tool detection has run
-        ensureDetected();
 
-        if (detectedTool == Tool.NONE) {
+        if (currentTool() == Tool.NONE) {
             logger.log(Level.FINE, () -> "No MP4 tagging tool found - skipping " + videoFile);
             return true; // Not an error, just skip
         }
@@ -122,9 +154,9 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
 
         logger.log(Level.FINE, () -> "Tagging MP4 " + filename + " with: " +
             "show=" + showName + ", S" + season + "E" + episodeNum +
-            ", title=" + episodeTitle + ", tool=" + detectedTool);
+            ", title=" + episodeTitle + ", tool=" + currentTool());
 
-        if (detectedTool == Tool.ATOMIC_PARSLEY) {
+        if (currentTool() == Tool.ATOMIC_PARSLEY) {
             return tagWithAtomicParsley(videoFile, showName, season, episodeNum,
                 episodeTitle, filenameNoExt, airDateStr);
         } else {
@@ -139,7 +171,7 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
             int season, int episodeNum, String episodeTitle,
             String filenameNoExt, String airDateStr) {
         List<String> cmd = new ArrayList<>();
-        cmd.add(toolPath);
+        cmd.add(currentToolPath());
         cmd.add(videoFile.toString());
         cmd.add("--overWrite");
 
@@ -185,7 +217,7 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
             tempFile = Files.createTempFile(videoFile.getParent(), ".tvr-tag-", ext);
 
             List<String> cmd = new ArrayList<>();
-            cmd.add(toolPath);
+            cmd.add(currentToolPath());
             cmd.add("-y");            // overwrite temp file
             cmd.add("-i");
             cmd.add(videoFile.toString());
@@ -236,12 +268,12 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
     }
 
     private boolean runProcess(List<String> command, Path videoFile) {
-        ProcessRunner.Result result = ProcessRunner.run(command, PROCESS_TIMEOUT_SECONDS);
+        ProcessRunner.Result result = runOp.run(command, PROCESS_TIMEOUT_SECONDS);
         if (!result.success()) {
             if (result.exitCode() == -1) {
-                logger.warning(detectedTool + " timed out or failed to run for: " + videoFile);
+                logger.warning(currentTool() + " timed out or failed to run for: " + videoFile);
             } else {
-                logger.warning(detectedTool + " failed (exit " + result.exitCode() + ") for: "
+                logger.warning(currentTool() + " failed (exit " + result.exitCode() + ") for: "
                     + videoFile + "\nOutput: " + result.output());
             }
         }
@@ -250,39 +282,8 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
 
     // ---- Tool detection ----
 
-    private static void ensureDetected() {
-        if (detectedTool != null) {
-            return;
-        }
-
-        synchronized (DETECTION_LOCK) {
-            if (detectedTool != null) {
-                return;
-            }
-
-            // Try AtomicParsley first
-            String ap = detectAtomicParsley();
-            if (!ap.isEmpty()) {
-                toolPath = ap;
-                detectedTool = Tool.ATOMIC_PARSLEY;
-                logger.info("Found AtomicParsley: " + toolPath);
-                return;
-            }
-
-            // Fall back to ffmpeg
-            String ff = detectFfmpeg();
-            if (!ff.isEmpty()) {
-                toolPath = ff;
-                detectedTool = Tool.FFMPEG;
-                logger.info("Found ffmpeg (fallback): " + toolPath);
-                return;
-            }
-
-            toolPath = "";
-            detectedTool = Tool.NONE;
-            logger.info("No MP4 tagging tool found - MP4 tagging will be disabled");
-        }
-    }
+    // Detection now lives in the shared DetectedTool caches above
+    // (currentTool() / currentToolPath()); probes run lazily on first use.
 
     private static String detectAtomicParsley() {
         return ExternalToolDetector.detect(
@@ -314,14 +315,12 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
 
     @Override
     public boolean isToolAvailable() {
-        ensureDetected();
-        return detectedTool != Tool.NONE;
+        return currentTool() != Tool.NONE;
     }
 
     @Override
     public String getToolName() {
-        ensureDetected();
-        return switch (detectedTool) {
+        return switch (currentTool()) {
             case ATOMIC_PARSLEY -> "AtomicParsley";
             case FFMPEG -> "ffmpeg";
             case NONE -> "none";

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.tvrenamer.controller.util.ProcessOps;
 import org.tvrenamer.controller.subtitle.SubtitleMerger.MergeOutcome;
 import org.tvrenamer.controller.util.ProcessRunner;
 
@@ -122,7 +123,7 @@ class MkvSubtitleMergerTest {
     @Test
     void buildCommand_singleEnglishSrt_noDescriptors_snapshot(@TempDir Path dir) {
         Path media = dir.resolve("Westmark.Academy.S01E01.mkv");
-        Path tmp = dir.resolve("Westmark.Academy.S01E01.mkv.merging.mkv");
+        Path tmp = dir.resolve("Westmark.Academy.S01E01.merging.mkv");
         Path sub = dir.resolve("Westmark.Academy.S01E01.en.srt");
         SubtitleEntry entry = new SubtitleEntry(sub, "eng", "English",
             EnumSet.noneOf(Descriptor.class));
@@ -141,7 +142,7 @@ class MkvSubtitleMergerTest {
     @Test
     void buildCommand_multipleSubtitles_mixedLangsAndDescriptors_snapshot(@TempDir Path dir) {
         Path media = dir.resolve("Solar.Drift.S02E03.mkv");
-        Path tmp = dir.resolve("Solar.Drift.S02E03.mkv.merging.mkv");
+        Path tmp = dir.resolve("Solar.Drift.S02E03.merging.mkv");
         Path sub1 = dir.resolve("Solar.Drift.S02E03.en.forced.sdh.srt");
         Path sub2 = dir.resolve("Solar.Drift.S02E03.fr.srt");
 
@@ -168,7 +169,7 @@ class MkvSubtitleMergerTest {
     @Test
     void buildCommand_commentaryDescriptor_setsCommentaryFlag(@TempDir Path dir) {
         Path media = dir.resolve("The.Quiet.Ones.S01E01.mkv");
-        Path tmp = dir.resolve("The.Quiet.Ones.S01E01.mkv.merging.mkv");
+        Path tmp = dir.resolve("The.Quiet.Ones.S01E01.merging.mkv");
         Path sub = dir.resolve("The.Quiet.Ones.S01E01.en.commentary.srt");
 
         SubtitleEntry entry = new SubtitleEntry(sub, "eng", "English (Commentary)",
@@ -190,7 +191,7 @@ class MkvSubtitleMergerTest {
     @Test
     void buildCommand_signsSongsDub_setNoFlags_onlyTrackName(@TempDir Path dir) {
         Path media = dir.resolve("Westmark.Academy.S01E02.mkv");
-        Path tmp = dir.resolve("Westmark.Academy.S01E02.mkv.merging.mkv");
+        Path tmp = dir.resolve("Westmark.Academy.S01E02.merging.mkv");
         Path subSigns = dir.resolve("Westmark.Academy.S01E02.en.signs.srt");
         Path subSongs = dir.resolve("Westmark.Academy.S01E02.en.songs.srt");
         Path subDub = dir.resolve("Westmark.Academy.S01E02.en.dub.srt");
@@ -355,7 +356,7 @@ class MkvSubtitleMergerTest {
         // the swap can succeed.  We use 110 bytes so it's well above the source's
         // 80% threshold; content marker "MERGED" lets us verify the swap landed.
         byte[] mergedPayload = makePayload("MERGED", 110);
-        Path expectedTemp = dir.resolve("show.mkv.merging.mkv");
+        Path expectedTemp = dir.resolve("show.merging.mkv");
 
         FakeMerger merger = new FakeMerger()
             .withResult(success(""))
@@ -396,7 +397,7 @@ class MkvSubtitleMergerTest {
             EnumSet.noneOf(Descriptor.class));
         MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
-        Path expectedTemp = dir.resolve("show.mkv.merging.mkv");
+        Path expectedTemp = dir.resolve("show.merging.mkv");
         // Even on failure, write a temp file so we can confirm the production
         // code deletes it on the failure branch.
         FakeMerger merger = new FakeMerger()
@@ -425,7 +426,7 @@ class MkvSubtitleMergerTest {
             EnumSet.noneOf(Descriptor.class));
         MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
-        Path expectedTemp = dir.resolve("show.mkv.merging.mkv");
+        Path expectedTemp = dir.resolve("show.merging.mkv");
         // mkvmerge "succeeds" but writes a 0-byte temp file.  0 bytes is far
         // below the 80% floor of the 100-byte source, so the integrity gate
         // must reject and merge() must report FAILED + clean up.
@@ -480,7 +481,7 @@ class MkvSubtitleMergerTest {
             EnumSet.noneOf(Descriptor.class));
         MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
-        Path expectedTemp = dir.resolve("show.mkv.merging.mkv");
+        Path expectedTemp = dir.resolve("show.merging.mkv");
         FakeMerger merger = new FakeMerger()
             .withResult(success(""))
             .withSideEffect(() -> Files.write(expectedTemp, makePayload("MERGED", 110)));
@@ -524,7 +525,7 @@ class MkvSubtitleMergerTest {
             EnumSet.noneOf(Descriptor.class));
         MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
 
-        Path expectedTemp = dir.resolve("show.mkv.merging.mkv");
+        Path expectedTemp = dir.resolve("show.merging.mkv");
         // Simulate a process invocation that materialises a partial temp and
         // then throws (e.g. SecurityException from ProcessBuilder.start).
         FakeMerger merger = new FakeMerger()

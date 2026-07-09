@@ -36,26 +36,50 @@ public class MkvMetadataTagger implements VideoMetadataTagger {
 
     private static final Set<String> SUPPORTED_EXTENSIONS = Set.of(".mkv", ".webm");
 
-    // Cached mkvpropedit path (null = not checked yet, empty = not found)
-    private static volatile String mkvpropeditPath = null;
-    private static final Object DETECTION_LOCK = new Object();
+    // Shared detection cache (Round-4 #24 consolidation).
+    private static final org.tvrenamer.controller.util.DetectedTool TOOL =
+        new org.tvrenamer.controller.util.DetectedTool("mkvpropedit", () ->
+            ExternalToolDetector.detect(
+                new String[] { "mkvpropedit" },
+                new String[] {
+                    "C:\\Program Files\\MKVToolNix\\mkvpropedit.exe",
+                    "C:\\Program Files (x86)\\MKVToolNix\\mkvpropedit.exe"
+                },
+                new String[] {
+                    "/usr/local/bin/mkvpropedit",
+                    "/opt/homebrew/bin/mkvpropedit"
+                }
+            ));
 
     /** Reset the cached detection; tests use this to avoid probing the host PATH. */
     static void resetDetectionForTesting() {
-        synchronized (DETECTION_LOCK) {
-            mkvpropeditPath = null;
-        }
+        TOOL.resetForTesting();
     }
 
     /** Force a detection state (null = "no tool found"); tests only. */
     static void setToolPathForTesting(String path) {
-        synchronized (DETECTION_LOCK) {
-            mkvpropeditPath = (path == null) ? "" : path;
-        }
+        TOOL.setForTesting(path);
     }
 
     // Process timeout in seconds
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
+
+    // Process indirection (constructor-injected), mirroring the mergers:
+    // tests can now reach runMkvpropedit without spawning real binaries.
+    private final org.tvrenamer.controller.util.ProcessOps.Run runOp;
+
+    /** Production constructor: routes through {@link ProcessRunner}. */
+    public MkvMetadataTagger() {
+        this(org.tvrenamer.controller.util.ProcessOps.REAL);
+    }
+
+    /** Test constructor: accepts an injected process operation. */
+    MkvMetadataTagger(org.tvrenamer.controller.util.ProcessOps.Run runOp) {
+        if (runOp == null) {
+            throw new IllegalArgumentException("ProcessOps must not be null");
+        }
+        this.runOp = runOp;
+    }
 
     @Override
     public boolean supportsExtension(String extension) {
@@ -138,49 +162,12 @@ public class MkvMetadataTagger implements VideoMetadataTagger {
     }
 
     /**
-     * Get the path to mkvpropedit, detecting it if necessary.
-     * Result is cached for performance.
+     * Get the path to mkvpropedit via the shared detection cache.
      *
      * @return path to mkvpropedit executable, or empty string if not found
      */
     private static String getMkvpropeditPath() {
-        if (mkvpropeditPath != null) {
-            return mkvpropeditPath;
-        }
-
-        synchronized (DETECTION_LOCK) {
-            // Double-check after acquiring lock
-            if (mkvpropeditPath != null) {
-                return mkvpropeditPath;
-            }
-
-            mkvpropeditPath = detectMkvpropedit();
-            if (mkvpropeditPath.isEmpty()) {
-                logger.info("mkvpropedit not found - MKV tagging will be disabled");
-            } else {
-                logger.info("Found mkvpropedit: " + mkvpropeditPath);
-            }
-            return mkvpropeditPath;
-        }
-    }
-
-    /**
-     * Detect mkvpropedit installation.
-     *
-     * @return path to mkvpropedit, or empty string if not found
-     */
-    private static String detectMkvpropedit() {
-        return ExternalToolDetector.detect(
-            new String[] { "mkvpropedit" },
-            new String[] {
-                "C:\\Program Files\\MKVToolNix\\mkvpropedit.exe",
-                "C:\\Program Files (x86)\\MKVToolNix\\mkvpropedit.exe"
-            },
-            new String[] {
-                "/usr/local/bin/mkvpropedit",
-                "/opt/homebrew/bin/mkvpropedit"
-            }
-        );
+        return TOOL.path();
     }
 
     /**
@@ -278,7 +265,7 @@ public class MkvMetadataTagger implements VideoMetadataTagger {
             "--set", "title=" + segmentTitle
         );
 
-        ProcessRunner.Result result = ProcessRunner.run(command, PROCESS_TIMEOUT_SECONDS);
+        ProcessRunner.Result result = runOp.run(command, PROCESS_TIMEOUT_SECONDS);
         if (!result.success()) {
             if (result.exitCode() == -1) {
                 logger.warning("mkvpropedit timed out or failed to run for: " + videoFile);

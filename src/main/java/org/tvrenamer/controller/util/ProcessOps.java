@@ -1,14 +1,13 @@
-package org.tvrenamer.controller.subtitle;
+package org.tvrenamer.controller.util;
 
 import java.util.List;
 import java.util.function.Consumer;
-import org.tvrenamer.controller.util.ProcessRunner;
 
 /**
- * Package-private process-spawning indirection used by the per-format
- * subtitle mergers.  Both mergers take instances of these interfaces via
- * their constructors so unit tests can inject fakes without touching
- * static state or subclassing the merger.
+ * Process-spawning indirection used by the external-tool integrations
+ * (subtitle mergers and metadata taggers).  Tool classes take instances of
+ * these interfaces via their constructors so unit tests can inject fakes
+ * without touching static state or subclassing.
  *
  * <p>Production code uses the {@link #REAL} and {@link #REAL_STREAMING}
  * defaults that delegate straight to {@link ProcessRunner}.  The
@@ -25,7 +24,7 @@ import org.tvrenamer.controller.util.ProcessRunner;
  * }
  * }</pre>
  */
-final class ProcessOps {
+public final class ProcessOps {
 
     private ProcessOps() {
         // namespace only
@@ -36,7 +35,7 @@ final class ProcessOps {
      * {@link ProcessRunner#run(List, int)}.
      */
     @FunctionalInterface
-    interface Run {
+    public interface Run {
         ProcessRunner.Result run(List<String> command, int timeoutSeconds);
     }
 
@@ -46,7 +45,7 @@ final class ProcessOps {
      * {@link ProcessRunner#runStreaming(List, int, Consumer)}.
      */
     @FunctionalInterface
-    interface Streaming {
+    public interface Streaming {
         ProcessRunner.Result run(
                 List<String> command,
                 int timeoutSeconds,
@@ -54,8 +53,8 @@ final class ProcessOps {
     }
 
     /** Default {@link Run} backed by {@link ProcessRunner#run}. */
-    static final Run REAL = ProcessRunner::run;
+    public static final Run REAL = ProcessRunner::run;
 
     /** Default {@link Streaming} backed by {@link ProcessRunner#runStreaming}. */
-    static final Streaming REAL_STREAMING = ProcessRunner::runStreaming;
+    public static final Streaming REAL_STREAMING = ProcessRunner::runStreaming;
 }

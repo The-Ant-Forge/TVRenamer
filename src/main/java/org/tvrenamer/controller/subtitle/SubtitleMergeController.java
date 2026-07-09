@@ -231,10 +231,9 @@ public final class SubtitleMergeController {
             return Result.FAILED;
         }
         return switch (outcome) {
-            case SUCCESS -> {
-                logger.info("Merged " + toMerge.size() + " subtitle track(s) into " + mediaFile);
-                yield Result.SUCCESS;
-            }
+            // The merger already logs the success INFO (previously this arm
+            // duplicated it, producing two identical lines per merged file).
+            case SUCCESS -> Result.SUCCESS;
             // Tool became unavailable between our check and the merger's; treat as NO_TOOL.
             case SKIPPED_NO_TOOL -> Result.NO_TOOL;
             // Already logged by the merger; just propagate the failure.
@@ -333,9 +332,10 @@ public final class SubtitleMergeController {
             return;
         }
 
-        // Match either "<base>.merging.<ext>" (Mp4SubtitleMerger style) or
-        // "<filename>.merging.<ext>" (current MkvSubtitleMerger style) in case
-        // the latter ever leaves temps behind. Both share the .merging. infix.
+        // Both mergers now share SubtitleSwap.computeTempPath's
+        // "<base>.merging.<ext>" scheme.  The legacy MKV shape
+        // "<filename>.merging.<ext>" is still cleaned for one-transition
+        // backwards compatibility (temps left by a pre-consolidation build).
         Map<String, String> candidates = new LinkedHashMap<>();
         candidates.put((base + MERGING_INFIX + containerExt).toLowerCase(Locale.ROOT), "");
         candidates.put((filename + MERGING_INFIX + containerExt).toLowerCase(Locale.ROOT), "");

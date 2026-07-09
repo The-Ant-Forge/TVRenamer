@@ -1,7 +1,5 @@
 package org.tvrenamer.controller.subtitle;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,11 +10,10 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.tvrenamer.controller.util.ProcessOps;
 import org.tvrenamer.controller.util.ExternalToolDetector;
 import org.tvrenamer.controller.util.ProcessRunner;
-import org.tvrenamer.controller.util.StringUtils;
 
-import java.util.function.IntConsumer;
 
 /**
  * Mux subtitle tracks into an MKV container using {@code mkvmerge} (MKVToolNix).
@@ -36,7 +33,7 @@ import java.util.function.IntConsumer;
  * pull a JSON parser onto the classpath just for this, we scan the output with a
  * regex.  See {@link #PATTERN_SUBTITLE_LANG} for the exact shape.
  */
-public final class MkvSubtitleMerger implements SubtitleMerger {
+public final class MkvSubtitleMerger extends AbstractSubtitleMerger {
 
     private static final Logger logger = Logger.getLogger(MkvSubtitleMerger.class.getName());
 
@@ -45,18 +42,6 @@ public final class MkvSubtitleMerger implements SubtitleMerger {
     /** Subtitle formats mkvmerge ingests natively. */
     private static final Set<String> SUBTITLE_EXTENSIONS = Set.of(".srt", ".ass", ".ssa", ".vtt");
 
-    /** Cached mkvmerge path (null = not checked yet, empty = not found). */
-    private static volatile String toolPath = null;
-    private static final Object DETECTION_LOCK = new Object();
-
-    // ---- Process indirection (constructor-injected) ----
-
-    /** Per-instance process runner for tests to inject fakes via the package-private constructor. */
-    private final ProcessOps.Run runOp;
-
-    /** Per-instance streaming process runner — used during the merge for progress parsing. */
-    private final ProcessOps.Streaming streamingOp;
-
     /** Public no-arg constructor for production: routes through {@link ProcessRunner}. */
     public MkvSubtitleMerger() {
         this(ProcessOps.REAL, ProcessOps.REAL_STREAMING);
@@ -64,11 +49,27 @@ public final class MkvSubtitleMerger implements SubtitleMerger {
 
     /** Test constructor: package-private, accepts injected process operations. */
     MkvSubtitleMerger(ProcessOps.Run runOp, ProcessOps.Streaming streamingOp) {
-        if (runOp == null || streamingOp == null) {
-            throw new IllegalArgumentException("ProcessOps must not be null");
-        }
-        this.runOp = runOp;
-        this.streamingOp = streamingOp;
+        super(runOp, streamingOp);
+    }
+
+    // ---- AbstractSubtitleMerger hooks ----
+
+    @Override
+    protected boolean toolDetected() {
+        return ensureDetected();
+    }
+
+    @Override
+    protected List<String> buildMergeCommand(
+            Path mediaFile, Path temp, List<SubtitleEntry> subtitles, boolean streaming) {
+        // --gui-mode (added when streaming) makes mkvmerge emit the
+        // machine-readable #GUI#progress NN% lines the parser consumes.
+        return buildCommand(currentToolPath(), mediaFile, temp, subtitles, streaming);
+    }
+
+    @Override
+    protected int parseProgress(String line) {
+        return parseProgressPercent(line);
     }
 
     /**
@@ -129,7 +130,7 @@ public final class MkvSubtitleMerger implements SubtitleMerger {
 
         ProcessRunner.Result result;
         try {
-            result = runOp.run(cmd, SubtitleSwap.computeTimeoutSeconds(0L));
+            result = runOp().run(cmd, SubtitleSwap.computeTimeoutSeconds(0L));
         } catch (RuntimeException re) {
             logger.log(Level.FINE, "mkvmerge --identify threw for " + mediaFile, re);
             return false;
@@ -191,109 +192,10 @@ public final class MkvSubtitleMerger implements SubtitleMerger {
         return false;
     }
 
-    @Override
-    public MergeOutcome merge(
-            Path mediaFile,
-            List<SubtitleEntry> subtitles,
-            IntConsumer onProgress) {
-        if (subtitles == null || subtitles.isEmpty()) {
-            // Defensive: the controller filters before calling, so this is a vacuous
-            // success rather than an error.
-            return MergeOutcome.SUCCESS;
-        }
-        if (!ensureDetected()) {
-            return MergeOutcome.SKIPPED_NO_TOOL;
-        }
-        if (mediaFile == null) {
-            // Mirror Mp4SubtitleMerger: fail cleanly rather than NPE below.
-            return MergeOutcome.FAILED;
-        }
-
-        String fileName = mediaFile.getFileName().toString();
-        String ext = StringUtils.getExtension(fileName);
-        Path parent = mediaFile.getParent();
-        Path tempFile = (parent != null)
-            ? parent.resolve(fileName + ".merging" + ext)
-            : Path.of(fileName + ".merging" + ext);
-
-        long sourceBytes;
-        try {
-            sourceBytes = Files.size(mediaFile);
-        } catch (IOException ioe) {
-            logger.log(Level.WARNING, "Could not size source file: " + mediaFile, ioe);
-            return MergeOutcome.FAILED;
-        }
-
-        List<String> cmd = buildCommand(currentToolPath(), mediaFile, tempFile,
-            subtitles, onProgress != null);
-        int timeoutSeconds = SubtitleSwap.computeTimeoutSeconds(sourceBytes);
-
-        // Parse #GUI#progress NN% lines from --gui-mode output and forward
-        // the percentage to the caller.  Errors in the consumer are caught
-        // by ProcessRunner.runStreaming, so we don't have to.
-        java.util.function.Consumer<String> lineSink = (onProgress == null)
-            ? null
-            : line -> {
-                int pct = parseProgressPercent(line);
-                if (pct >= 0) {
-                    onProgress.accept(pct);
-                }
-            };
-
-        // When no progress consumer is requested we use the original
-        // non-streaming runProcess overload — keeps test fakes that only
-        // override the 2-arg version working unchanged.
-        ProcessRunner.Result result;
-        try {
-            result = (lineSink == null)
-                ? runOp.run(cmd, timeoutSeconds)
-                : streamingOp.run(cmd, timeoutSeconds, lineSink);
-        } catch (RuntimeException re) {
-            // Mirror Mp4SubtitleMerger: a throwing process invocation (e.g.
-            // SecurityException from ProcessBuilder.start) must not leak the
-            // temp file or propagate out of the merger.
-            logger.log(Level.WARNING, "mkvmerge threw while merging " + mediaFile, re);
-            tryDelete(tempFile);
-            return MergeOutcome.FAILED;
-        }
-
-        if (result == null || !result.success()) {
-            int exitCode = (result == null) ? -1 : result.exitCode();
-            String output = (result == null) ? "" : result.output();
-            logger.warning("mkvmerge failed (exit " + exitCode + ") for: " + mediaFile
-                + "\nOutput: " + tail(output, 1000));
-            tryDelete(tempFile);
-            return MergeOutcome.FAILED;
-        }
-
-        boolean intact;
-        try {
-            intact = SubtitleSwap.integrityGate(tempFile, mediaFile);
-        } catch (IOException ioe) {
-            logger.log(Level.WARNING,
-                "Integrity gate IO error for " + mediaFile + " (temp: " + tempFile + ")", ioe);
-            tryDelete(tempFile);
-            return MergeOutcome.FAILED;
-        }
-        if (!intact) {
-            logger.warning("Integrity gate failed for " + mediaFile
-                + "; temp file " + tempFile + " was below the 80% size floor.");
-            tryDelete(tempFile);
-            return MergeOutcome.FAILED;
-        }
-
-        boolean swapped = SubtitleSwap.swap(tempFile, mediaFile);
-        if (!swapped) {
-            logger.warning("Atomic swap failed for " + mediaFile
-                + "; merged temp file is preserved at " + tempFile + " for manual recovery.");
-            return MergeOutcome.FAILED;
-        }
-
-        int n = subtitles.size();
-        logger.info("Merged " + n + " subtitle track" + (n == 1 ? "" : "s")
-            + " into " + mediaFile);
-        return MergeOutcome.SUCCESS;
-    }
+    // merge() lives in AbstractSubtitleMerger (shared skeleton).  Note the
+    // temp-file naming changed with the consolidation: previously this class
+    // used <full-name>.merging.<ext>; the canonical scheme is now
+    // SubtitleSwap.computeTempPath's <base>.merging.<ext>, same as MP4.
 
     /**
      * Parse a percentage from an mkvmerge {@code --gui-mode} progress line of
@@ -381,91 +283,43 @@ public final class MkvSubtitleMerger implements SubtitleMerger {
         return cmd;
     }
 
-    // ---- Tool detection (cache once per JVM) ----
+    // ---- Tool detection (shared DetectedTool cache) ----
 
-    /**
-     * Resolve mkvmerge's path once and cache.  Returns {@code true} if a usable
-     * mkvmerge was found (path non-empty).  Mirrors the double-checked pattern
-     * in {@link org.tvrenamer.controller.metadata.Mp4MetadataTagger#ensureDetected()}.
-     */
+    private static final org.tvrenamer.controller.util.DetectedTool TOOL =
+        new org.tvrenamer.controller.util.DetectedTool("mkvmerge", () ->
+            ExternalToolDetector.detect(
+                new String[] { "mkvmerge" },
+                new String[] {
+                    "C:\\Program Files\\MKVToolNix\\mkvmerge.exe",
+                    "C:\\Program Files (x86)\\MKVToolNix\\mkvmerge.exe"
+                },
+                new String[] {
+                    "/usr/local/bin/mkvmerge",
+                    "/opt/homebrew/bin/mkvmerge"
+                }
+            ));
+
     static boolean ensureDetected() {
-        String cached = toolPath;
-        if (cached != null) {
-            return !cached.isEmpty();
-        }
-
-        synchronized (DETECTION_LOCK) {
-            if (toolPath != null) {
-                return !toolPath.isEmpty();
-            }
-
-            String detected = detectMkvmerge();
-            toolPath = detected;
-            if (detected.isEmpty()) {
-                logger.info("mkvmerge not found - MKV subtitle merging will be disabled");
-            } else {
-                logger.info("Found mkvmerge: " + detected);
-            }
-            return !toolPath.isEmpty();
-        }
-    }
-
-    private static String detectMkvmerge() {
-        return ExternalToolDetector.detect(
-            new String[] { "mkvmerge" },
-            new String[] {
-                "C:\\Program Files\\MKVToolNix\\mkvmerge.exe",
-                "C:\\Program Files (x86)\\MKVToolNix\\mkvmerge.exe"
-            },
-            new String[] {
-                "/usr/local/bin/mkvmerge",
-                "/opt/homebrew/bin/mkvmerge"
-            }
-        );
+        return TOOL.isAvailable();
     }
 
     /**
      * Force the cached tool path to a specific value for testing.  Pass an empty
-     * string to simulate "tool not found"; pass any non-empty value to simulate
-     * a detected install at that path.  Production code never calls this.
+     * string (or null) to simulate "tool not found".  Production never calls this.
      */
     static void setToolPathForTesting(String path) {
-        toolPath = path;
+        TOOL.setForTesting(path);
     }
 
     /** Reset the detection cache so the next call re-detects.  Tests only. */
     static void resetDetectionForTesting() {
-        toolPath = null;
+        TOOL.resetForTesting();
     }
 
     /** Return the currently cached tool path, or "mkvmerge" as a final fallback. */
     private static String currentToolPath() {
-        String cached = toolPath;
-        if (cached != null && !cached.isEmpty()) {
-            return cached;
-        }
-        return "mkvmerge";
+        String cached = TOOL.path();
+        return cached.isEmpty() ? "mkvmerge" : cached;
     }
 
-    // ---- Helpers ----
-
-    /** Best-effort cleanup of the temp file; failures are silent. */
-    private static void tryDelete(Path file) {
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException ignored) {
-            // best effort
-        }
-    }
-
-    /** Return the last {@code maxChars} characters of {@code s}, or {@code s} if shorter. */
-    private static String tail(String s, int maxChars) {
-        if (s == null) {
-            return "";
-        }
-        if (s.length() <= maxChars) {
-            return s;
-        }
-        return s.substring(s.length() - maxChars);
-    }
 }

@@ -89,6 +89,28 @@ public final class SubtitleSwap {
         moveOperation = REAL_MOVE;
     }
 
+    /** Suffix for the sibling temp file merged output is written to before the swap. */
+    private static final String MERGING_SUFFIX = ".merging";
+
+    /**
+     * Compute the sibling {@code <base>.merging.<ext>} temp path used during
+     * the swap.  This is THE canonical scheme for both mergers — previously
+     * MP4 used {@code <base>.merging.<ext>} while MKV used
+     * {@code <full-name>.merging.<ext>}, forcing the controller's stale-temp
+     * cleanup to enumerate both shapes (Round-4 #27).
+     *
+     * @param mediaFile the media file being merged into
+     * @return the sibling temp path
+     */
+    public static Path computeTempPath(Path mediaFile) {
+        Path parent = mediaFile.getParent();
+        String name = mediaFile.getFileName().toString();
+        String ext = org.tvrenamer.controller.util.StringUtils.getExtension(name);
+        String base = org.tvrenamer.controller.util.StringUtils.getBaseName(name);
+        String tempName = base + MERGING_SUFFIX + ext;
+        return (parent == null) ? Path.of(tempName) : parent.resolve(tempName);
+    }
+
     /**
      * Cheap pre-swap sanity check: the temp file exists and is at least 80% of the
      * source size.  Subtitle muxing should never shrink the container dramatically;
