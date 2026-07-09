@@ -443,6 +443,61 @@ class MkvSubtitleMergerTest {
             "temp file should be deleted after integrity gate failure");
     }
 
+    // ---------- parseProgressPercent (Round-4 #30) ----------
+
+    @Test
+    void parseProgress_realGuiModeLines() {
+        assertEquals(0, MkvSubtitleMerger.parseProgressPercent("#GUI#progress 0%"));
+        assertEquals(42, MkvSubtitleMerger.parseProgressPercent("#GUI#progress 42%"));
+        assertEquals(100, MkvSubtitleMerger.parseProgressPercent("#GUI#progress 100%"));
+    }
+
+    @Test
+    void parseProgress_nonProgressLinesReturnMinusOne() {
+        assertEquals(-1, MkvSubtitleMerger.parseProgressPercent(
+            "mkvmerge v98.0 ('The Sound Of Silence') 64-bit"));
+        assertEquals(-1, MkvSubtitleMerger.parseProgressPercent(
+            "#GUI#track_statistics ..."));
+        assertEquals(-1, MkvSubtitleMerger.parseProgressPercent(
+            "#GUI#progress abc%"));
+        assertEquals(-1, MkvSubtitleMerger.parseProgressPercent(""));
+        assertEquals(-1, MkvSubtitleMerger.parseProgressPercent(null));
+    }
+
+    @Test
+    void parseProgress_clampsOutOfRange() {
+        assertEquals(100, MkvSubtitleMerger.parseProgressPercent("#GUI#progress 150%"));
+    }
+
+    // ---------- merge: swap exhaustion (Round-4 #30) ----------
+
+    @Test
+    void merge_swapExhaustion_returnsFailedAndPreservesTemp(@TempDir Path dir)
+            throws IOException {
+        Path media = touch(dir.resolve("show.mkv"), 100);
+        Path sub = touch(dir.resolve("show.en.srt"), 30);
+        SubtitleEntry entry = new SubtitleEntry(sub, "eng", "English",
+            EnumSet.noneOf(Descriptor.class));
+        MkvSubtitleMerger.setToolPathForTesting(FAKE_TOOL_PATH);
+
+        Path expectedTemp = dir.resolve("show.mkv.merging.mkv");
+        FakeMerger merger = new FakeMerger()
+            .withResult(success(""))
+            .withSideEffect(() -> Files.write(expectedTemp, makePayload("MERGED", 110)));
+
+        // Every swap attempt fails (simulated persistent AV/indexer lock).
+        SubtitleSwap.setMoveOperation((src, dst) -> {
+            throw new IOException("simulated persistent lock");
+        });
+
+        MergeOutcome outcome = merger.merge(media, List.of(entry));
+
+        assertSame(MergeOutcome.FAILED, outcome);
+        assertTrue(Files.exists(expectedTemp),
+            "temp must be PRESERVED on swap exhaustion for manual recovery");
+        assertTrue(Files.exists(media), "source must be untouched");
+    }
+
     // ---------- merge: Round-4 #25 guards ----------
 
     @Test

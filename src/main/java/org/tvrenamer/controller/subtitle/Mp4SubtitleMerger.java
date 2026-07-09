@@ -236,29 +236,16 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
         int timeoutSeconds = SubtitleSwap.computeTimeoutSeconds(sourceBytes);
 
         // Parse MP4Box's "ISO File Writing: |......| (NN/100)" progress lines
-        // and forward the percentage to the caller.  Any other parsing pattern
-        // is silently ignored.  When onProgress is null we skip the streaming
-        // path entirely — preserves the pre-progress-feature behaviour and
-        // matches what existing test fakes inject (non-streaming RunOperation).
+        // and forward the percentage to the caller.  When onProgress is null
+        // we skip the streaming path entirely — preserves the
+        // pre-progress-feature behaviour and matches what existing test fakes
+        // inject (non-streaming ops).
         java.util.function.Consumer<String> lineSink = (onProgress == null)
             ? null
             : line -> {
-                int idx = line.indexOf("(");
-                int slash = (idx < 0) ? -1 : line.indexOf('/', idx);
-                int closeParen = (slash < 0) ? -1 : line.indexOf(')', slash);
-                if (slash > idx && closeParen > slash) {
-                    String numStr = line.substring(idx + 1, slash).trim();
-                    String denStr = line.substring(slash + 1, closeParen).trim();
-                    try {
-                        int num = Integer.parseInt(numStr);
-                        int den = Integer.parseInt(denStr);
-                        if (den > 0) {
-                            int pct = (int) Math.round(num * 100.0 / den);
-                            onProgress.accept(Math.max(0, Math.min(100, pct)));
-                        }
-                    } catch (NumberFormatException ignored) {
-                        // Not a progress line — ignore.
-                    }
+                int pct = parseProgressPercent(line);
+                if (pct >= 0) {
+                    onProgress.accept(pct);
                 }
             };
 
@@ -329,6 +316,40 @@ public final class Mp4SubtitleMerger implements SubtitleMerger {
         cmd.add(temp.toString());
         cmd.add(mediaFile.toString());
         return cmd;
+    }
+
+    /**
+     * Parse a percentage from an MP4Box progress line of the form
+     * {@code "ISO File Writing: |=====   | (42/100)"}.  Package-private so
+     * tests can pin the parser against real tool output — format drift here
+     * is exactly the "output-parsing resilience" risk the review flagged.
+     *
+     * @param line one line of MP4Box output
+     * @return the clamped percentage [0, 100], or -1 if the line carries no
+     *    parseable progress
+     */
+    static int parseProgressPercent(String line) {
+        if (line == null) {
+            return -1;
+        }
+        int idx = line.indexOf('(');
+        int slash = (idx < 0) ? -1 : line.indexOf('/', idx);
+        int closeParen = (slash < 0) ? -1 : line.indexOf(')', slash);
+        if (slash > idx && closeParen > slash) {
+            String numStr = line.substring(idx + 1, slash).trim();
+            String denStr = line.substring(slash + 1, closeParen).trim();
+            try {
+                int num = Integer.parseInt(numStr);
+                int den = Integer.parseInt(denStr);
+                if (den > 0) {
+                    int pct = (int) Math.round(num * 100.0 / den);
+                    return Math.max(0, Math.min(100, pct));
+                }
+            } catch (NumberFormatException ignored) {
+                // Not a progress line.
+            }
+        }
+        return -1;
     }
 
     /**

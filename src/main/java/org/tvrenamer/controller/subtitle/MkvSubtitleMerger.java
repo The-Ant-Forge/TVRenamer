@@ -234,19 +234,9 @@ public final class MkvSubtitleMerger implements SubtitleMerger {
         java.util.function.Consumer<String> lineSink = (onProgress == null)
             ? null
             : line -> {
-                int idx = line.indexOf("#GUI#progress ");
-                if (idx >= 0) {
-                    int percentEnd = line.indexOf('%', idx);
-                    if (percentEnd > idx) {
-                        try {
-                            int pct = Integer.parseInt(
-                                line.substring(idx + "#GUI#progress ".length(),
-                                    percentEnd).trim());
-                            onProgress.accept(Math.max(0, Math.min(100, pct)));
-                        } catch (NumberFormatException ignored) {
-                            // Bogus progress line; ignore.
-                        }
-                    }
+                int pct = parseProgressPercent(line);
+                if (pct >= 0) {
+                    onProgress.accept(pct);
                 }
             };
 
@@ -303,6 +293,36 @@ public final class MkvSubtitleMerger implements SubtitleMerger {
         logger.info("Merged " + n + " subtitle track" + (n == 1 ? "" : "s")
             + " into " + mediaFile);
         return MergeOutcome.SUCCESS;
+    }
+
+    /**
+     * Parse a percentage from an mkvmerge {@code --gui-mode} progress line of
+     * the form {@code "#GUI#progress 42%"}.  Package-private so tests can pin
+     * the parser against real tool output.
+     *
+     * @param line one line of mkvmerge output
+     * @return the clamped percentage [0, 100], or -1 if the line carries no
+     *    parseable progress
+     */
+    static int parseProgressPercent(String line) {
+        if (line == null) {
+            return -1;
+        }
+        int idx = line.indexOf("#GUI#progress ");
+        if (idx >= 0) {
+            int percentEnd = line.indexOf('%', idx);
+            if (percentEnd > idx) {
+                try {
+                    int pct = Integer.parseInt(
+                        line.substring(idx + "#GUI#progress ".length(),
+                            percentEnd).trim());
+                    return Math.max(0, Math.min(100, pct));
+                } catch (NumberFormatException ignored) {
+                    // Bogus progress line.
+                }
+            }
+        }
+        return -1;
     }
 
     /**

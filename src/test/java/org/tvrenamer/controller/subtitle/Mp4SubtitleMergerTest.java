@@ -408,6 +408,63 @@ class Mp4SubtitleMergerTest {
         assertFalse(Files.exists(tempPath), "temp must be deleted when integrity gate fails");
     }
 
+    // ---------- parseProgressPercent (Round-4 #30) ----------
+
+    @Test
+    void parseProgress_realIsoWritingLines() {
+        // Captured shape from GPAC 2.x: bar plus "(NN/100)" fraction.
+        assertEquals(0, Mp4SubtitleMerger.parseProgressPercent(
+            "ISO File Writing: |                    | (0/100)"));
+        assertEquals(42, Mp4SubtitleMerger.parseProgressPercent(
+            "ISO File Writing: |========            | (42/100)"));
+        assertEquals(100, Mp4SubtitleMerger.parseProgressPercent(
+            "ISO File Writing: |====================| (100/100)"));
+    }
+
+    @Test
+    void parseProgress_nonHundredDenominatorScales() {
+        assertEquals(50, Mp4SubtitleMerger.parseProgressPercent("(1/2)"));
+        assertEquals(33, Mp4SubtitleMerger.parseProgressPercent("(1/3)"));
+    }
+
+    @Test
+    void parseProgress_nonProgressLinesReturnMinusOne() {
+        assertEquals(-1, Mp4SubtitleMerger.parseProgressPercent(
+            "MP4Box - GPAC version 2.2.1"));
+        assertEquals(-1, Mp4SubtitleMerger.parseProgressPercent("(abc/def)"));
+        assertEquals(-1, Mp4SubtitleMerger.parseProgressPercent("(1/0)"));
+        assertEquals(-1, Mp4SubtitleMerger.parseProgressPercent(""));
+        assertEquals(-1, Mp4SubtitleMerger.parseProgressPercent(null));
+    }
+
+    // ---------- merge: swap exhaustion (Round-4 #30) ----------
+
+    @Test
+    void merge_swapExhaustion_returnsFailedAndPreservesTemp(@TempDir Path dir)
+            throws IOException {
+        Path media = writeBytes(dir.resolve("Solar Drift S01E05.mp4"), 1000);
+        Path sub = writeBytes(dir.resolve("Solar Drift S01E05.srt"), 100);
+        Path expectedTemp = dir.resolve("Solar Drift S01E05.merging.mp4");
+
+        SubtitleEntry e = new SubtitleEntry(
+            sub, "eng", "English", EnumSet.noneOf(Descriptor.class));
+
+        merger.withResult(success(""))
+              .withSideEffect(() -> Files.write(expectedTemp, new byte[1100]));
+
+        // Every swap attempt fails (simulated persistent AV/indexer lock).
+        SubtitleSwap.setMoveOperation((src, dst) -> {
+            throw new IOException("simulated persistent lock");
+        });
+
+        SubtitleMerger.MergeOutcome outcome = merger.merge(media, List.of(e));
+
+        assertEquals(SubtitleMerger.MergeOutcome.FAILED, outcome);
+        assertTrue(Files.exists(expectedTemp),
+            "temp must be PRESERVED on swap exhaustion for manual recovery");
+        assertTrue(Files.exists(media), "source must be untouched");
+    }
+
     // ---------- helpers ----------
 
     /** Build a {@link ProcessRunner.Result} representing a successful run. */
