@@ -252,6 +252,24 @@ class Launcher {
             logger.info("=== TVRenamer Startup ===");
             logger.info("Version: " + VERSION_NUMBER);
 
+            // Warm the external-tool detection caches (MP4Box, mkvmerge,
+            // taggers) off the UI thread.  Cold-cache detection spawns up to
+            // two probe processes per tool; before this warmup, the first
+            // Preferences open after launch did those spawns synchronously
+            // on the SWT UI thread.
+            Thread toolDetectionWarmup = new Thread(() -> {
+                try {
+                    new org.tvrenamer.controller.subtitle.SubtitleMergeController()
+                        .getToolSummary();
+                    new org.tvrenamer.controller.metadata.MetadataTaggingController()
+                        .getToolSummary();
+                } catch (RuntimeException re) {
+                    logger.log(Level.FINE, "tool detection warmup failed", re);
+                }
+            }, "tool-detection-warmup");
+            toolDetectionWarmup.setDaemon(true);
+            toolDetectionWarmup.start();
+
             logger.info("Creating UIStarter...");
             UIStarter ui = new UIStarter();
 
