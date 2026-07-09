@@ -20,6 +20,9 @@ class HttpConnectionHandler {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
 
+    /** Pause before the single retry of a transient (429/5xx/IO) failure. */
+    private static final long RETRY_BACKOFF_MILLIS = 500L;
+
     private static final HttpClient CLIENT = HttpClient.newBuilder()
         .connectTimeout(CONNECT_TIMEOUT)
         .followRedirects(HttpClient.Redirect.NORMAL)
@@ -79,35 +82,66 @@ class HttpConnectionHandler {
             .GET()
             .build();
 
-        try {
-            HttpResponse<String> response = CLIENT.send(
-                request,
-                HttpResponse.BodyHandlers.ofString()
-            );
+        // One bounded retry for transient failures (429, 5xx, IOException).
+        // 404 is NOT retried: it's a deterministic answer, and the caller's
+        // consecutive-404 accounting handles flaky-vs-real distinctions.
+        final int maxAttempts = 2;
+        IOException lastIo = null;
+        int lastStatus = -1;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                HttpResponse<String> response = CLIENT.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+                );
 
-            int statusCode = response.statusCode();
-            if (statusCode >= 200 && statusCode < 300) {
-                String downloaded = response.body();
-                logger.fine("Downloaded " + urlString + " (" + statusCode + ")");
-                if (logger.isLoggable(Level.FINEST)) {
-                    logger.log(
-                        Level.FINEST,
-                        "Url stream:\n{0}",
-                        downloaded
-                    );
+                int statusCode = response.statusCode();
+                if (statusCode >= 200 && statusCode < 300) {
+                    String downloaded = response.body();
+                    logger.fine("Downloaded " + urlString + " (" + statusCode + ")");
+                    if (logger.isLoggable(Level.FINEST)) {
+                        logger.log(
+                            Level.FINEST,
+                            "Url stream:\n{0}",
+                            downloaded
+                        );
+                    }
+                    return downloaded;
+                } else if (statusCode == 404) {
+                    throw new FileNotFoundException(urlString);
                 }
-                return downloaded;
-            } else if (statusCode == 404) {
-                throw new FileNotFoundException(urlString);
+
+                lastStatus = statusCode;
+                lastIo = null;
+                boolean retryable = statusCode == 429 || statusCode >= 500;
+                if (!retryable || attempt == maxAttempts) {
+                    // Preserve response details for diagnostics.
+                    return downloadUrlFailed(statusCode, urlString, null);
+                }
+            } catch (FileNotFoundException fnfe) {
+                throw new TVRenamerIOException(
+                    "HTTP 404 downloading " + urlString, fnfe);
+            } catch (IOException ioe) {
+                lastIo = ioe;
+                lastStatus = -1;
+                if (attempt == maxAttempts) {
+                    return downloadUrlFailed(-1, urlString, ioe);
+                }
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return downloadUrlFailed(-1, urlString, ie);
             }
 
-            // Preserve response details for diagnostics.
-            return downloadUrlFailed(statusCode, urlString, null);
-        } catch (IOException ioe) {
-            return downloadUrlFailed(-1, urlString, ioe);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            return downloadUrlFailed(-1, urlString, ie);
+            logger.fine("Transient failure (status=" + lastStatus
+                + ") downloading " + urlString + "; retrying once");
+            try {
+                Thread.sleep(RETRY_BACKOFF_MILLIS);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return downloadUrlFailed(-1, urlString, ie);
+            }
         }
+        // Unreachable: every loop path returns or throws; keep javac happy.
+        return downloadUrlFailed(lastStatus, urlString, lastIo);
     }
 }

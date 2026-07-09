@@ -22,10 +22,14 @@ public class ListingsLookup {
     );
 
     /**
-     * A pool of low-priority threads to execute the listings lookups.
+     * A small pool of low-priority threads to execute the listings lookups.
+     * Bounded (matching ShowStore's pool size) so adding a large folder
+     * doesn't spawn one simultaneous provider fetch per unique series —
+     * an unbounded cached pool hammered the provider (rate-limit exposure)
+     * with arbitrary thread counts.
      */
     private static final ExecutorService THREAD_POOL =
-        Executors.newCachedThreadPool(r -> {
+        Executors.newFixedThreadPool(4, r -> {
             Thread t = new Thread(r);
             t.setPriority(Thread.MIN_PRIORITY);
             t.setDaemon(true);

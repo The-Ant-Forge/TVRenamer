@@ -87,6 +87,7 @@ public class TheTVDBProvider {
         logger.log(Level.FINE, () -> "About to download search results from " + searchURL);
 
         String content = new HttpConnectionHandler().downloadUrl(searchURL);
+        noteProviderSuccess();
 
         // Do not post-process the XML payload. Any string "encoding" here risks corrupting
         // the provider response (e.g., changing entity handling or whitespace).
@@ -105,6 +106,7 @@ public class TheTVDBProvider {
         logger.log(Level.FINE, () -> "Downloading episode listing from " + seriesURL);
 
         String content = new HttpConnectionHandler().downloadUrl(seriesURL);
+        noteProviderSuccess();
 
         // Do not post-process the XML payload. Any string "encoding" here risks corrupting
         // the provider response (e.g., changing entity handling or whitespace).
@@ -206,14 +208,38 @@ public class TheTVDBProvider {
         }
     }
 
+    /**
+     * Number of consecutive 404 responses required before we conclude the
+     * API itself has been discontinued.  A single 404 can be a transient
+     * proxy/CDN/captive-portal artifact; latching on it permanently disabled
+     * all lookups for the session with a misleading diagnosis.
+     */
+    private static final int CONSECUTIVE_404_LATCH_THRESHOLD = 3;
+
+    private static int consecutive404Count = 0;
+
+    /** Reset the consecutive-404 counter after any successful provider call. */
+    private static synchronized void noteProviderSuccess() {
+        consecutive404Count = 0;
+    }
+
     private static synchronized boolean isApiDiscontinuedError(Throwable e) {
         if (apiIsDeprecated) {
             return true;
         }
         while (e != null) {
             if (e instanceof FileNotFoundException) {
-                apiIsDeprecated = true;
-                return true;
+                consecutive404Count++;
+                if (consecutive404Count >= CONSECUTIVE_404_LATCH_THRESHOLD) {
+                    logger.warning(consecutive404Count
+                        + " consecutive 404s from the provider; concluding the"
+                        + " API has been discontinued for this session");
+                    apiIsDeprecated = true;
+                    return true;
+                }
+                // A 404, but not yet enough evidence to latch: report it as
+                // an ordinary lookup failure for this request only.
+                return false;
             }
             e = e.getCause();
         }
