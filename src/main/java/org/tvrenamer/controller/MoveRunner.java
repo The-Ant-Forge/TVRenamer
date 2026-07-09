@@ -599,9 +599,8 @@ public class MoveRunner implements Runnable {
             new org.tvrenamer.controller.subtitle.Mp4SubtitleMerger(),
             new org.tvrenamer.controller.subtitle.MkvSubtitleMerger());
 
-    /** Subtitle file extensions we recognise (lowercase, leading dot). */
-    private static final Set<String> MR_SUBTITLE_EXTENSIONS =
-        Set.of(".srt", ".ass", ".ssa", ".vtt");
+    // Subtitle extensions: SubtitlePairing.SUPPORTED_EXTENSIONS is the single
+    // canonical set (previously duplicated here and in ResultsTable).
 
     /**
      * Source-side subtitle merge.  Runs as the first task on the executor,
@@ -638,7 +637,7 @@ public class MoveRunner implements Runnable {
         if (destDir == null) {
             return null;
         }
-        String base = stripExt(desiredDestName);
+        String base = StringUtils.stripExtension(desiredDestName);
         if (base.isEmpty()) {
             return null;
         }
@@ -677,7 +676,7 @@ public class MoveRunner implements Runnable {
                 if (sub == null || sub == media) {
                     continue;
                 }
-                if (!MR_SUBTITLE_EXTENSIONS.contains(sub.sourceExt())) {
+                if (!SubtitlePairing.SUPPORTED_EXTENSIONS.contains(sub.sourceExt())) {
                     continue;
                 }
                 if (!media.destDir().equals(sub.destDir())) {
@@ -731,11 +730,11 @@ public class MoveRunner implements Runnable {
             boolean multipleMedia = false;
             List<FileMover> subMovers = new java.util.ArrayList<>();
             for (FileMover m : group) {
-                String ext = extOf(m.getCurrentPath());
+                String ext = StringUtils.lowerCaseExtension(m.getCurrentPath());
                 if (ext.isEmpty()) {
                     continue;
                 }
-                if (MR_SUBTITLE_EXTENSIONS.contains(ext)) {
+                if (SubtitlePairing.SUPPORTED_EXTENSIONS.contains(ext)) {
                     subMovers.add(m);
                 } else if (mediaMover == null) {
                     mediaMover = m;
@@ -759,7 +758,7 @@ public class MoveRunner implements Runnable {
                 continue;
             }
 
-            String mediaExt = extOf(mediaMover.getCurrentPath());
+            String mediaExt = StringUtils.lowerCaseExtension(mediaMover.getCurrentPath());
             SubtitleMerger merger = null;
             for (SubtitleMerger candidate : SHARED_MERGERS) {
                 if (candidate.supportsContainerExtension(mediaExt)) {
@@ -784,7 +783,7 @@ public class MoveRunner implements Runnable {
             List<org.tvrenamer.controller.subtitle.SubtitleEntry> entries =
                 new java.util.ArrayList<>();
             for (FileMover sub : subMovers) {
-                String subExt = extOf(sub.getCurrentPath());
+                String subExt = StringUtils.lowerCaseExtension(sub.getCurrentPath());
                 if (!merger.supportsSubtitleExtension(subExt)) {
                     continue;
                 }
@@ -828,11 +827,10 @@ public class MoveRunner implements Runnable {
                 }
             }
 
-            logger.fine("[SOURCE-SIDE] Invoking " + merger.getClass().getSimpleName()
-                + ".merge on " + mediaMover.getCurrentPath()
-                + " with " + entries.size() + " subtitle(s)");
             // Per-file progress consumer that forwards each percentage tick
             // to the subtitle listener for UI rendering on the matching row.
+            // (The single [SOURCE-SIDE] Outcome line below carries the merge
+            // details; the former per-invocation trace duplicated it.)
             final Path mediaSrcPath = mediaMover.getCurrentPath();
             java.util.function.IntConsumer progressConsumer = pct -> {
                 SubtitleMergeProgressListener listener = subtitleListener;
@@ -913,27 +911,8 @@ public class MoveRunner implements Runnable {
         return Boolean.TRUE;
     }
 
-    /** Extension (with leading dot, lowercased) of the given path's filename. */
-    private static String extOf(Path p) {
-        if (p == null) {
-            return "";
-        }
-        String name = p.getFileName() != null ? p.getFileName().toString() : "";
-        int dot = name.lastIndexOf('.');
-        if (dot < 0) {
-            return "";
-        }
-        return name.substring(dot).toLowerCase(java.util.Locale.ROOT);
-    }
-
-    /** Strip the final extension off a filename. */
-    private static String stripExt(String filename) {
-        if (filename == null) {
-            return "";
-        }
-        int dot = filename.lastIndexOf('.');
-        return dot < 0 ? filename : filename.substring(0, dot);
-    }
+    // Extension/base-name helpers live in StringUtils (lowerCaseExtension /
+    // stripExtension) — previously duplicated here and in ResultsTable.
 
     /**
      * Collects duplicate files found by all FileMover instances after moves complete.
@@ -1026,7 +1005,7 @@ public class MoveRunner implements Runnable {
                 continue;
             }
 
-            String ext = extOf(dest);
+            String ext = StringUtils.lowerCaseExtension(dest);
 
             // Case A: media-container destination -- it is itself the candidate.
             boolean isContainer = false;
@@ -1063,7 +1042,7 @@ public class MoveRunner implements Runnable {
                     if (!Files.isRegularFile(entry)) {
                         continue;
                     }
-                    String entryExt = extOf(entry);
+                    String entryExt = StringUtils.lowerCaseExtension(entry);
                     boolean entryIsContainer = false;
                     for (SubtitleMerger m : SHARED_MERGERS) {
                         if (m.supportsContainerExtension(entryExt)) {
@@ -1075,7 +1054,7 @@ public class MoveRunner implements Runnable {
                         continue;
                     }
                     String entryName = entry.getFileName().toString();
-                    String entryBaseLower = stripExt(entryName)
+                    String entryBaseLower = StringUtils.stripExtension(entryName)
                         .toLowerCase(java.util.Locale.ROOT);
                     if (entryBaseLower.isEmpty()) {
                         continue;
@@ -1166,7 +1145,6 @@ public class MoveRunner implements Runnable {
                 logger.fine("Post-batch skipping source-merged: " + normalisedEntry);
                 continue;
             }
-            logger.fine("Post-batch will examine: " + normalisedEntry);
             if (subtitleListener != null) {
                 try {
                     subtitleListener.subtitleMergeFileStarted(entry);
@@ -1175,7 +1153,6 @@ public class MoveRunner implements Runnable {
                 }
             }
 
-            logger.fine("[POST-BATCH] Invoking controller.mergeIfEnabled on " + entry);
             // Forward each progress tick to the listener so the row's
             // percentage label updates while the merger tool runs.
             final Path entryPath = entry;

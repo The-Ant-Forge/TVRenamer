@@ -2588,35 +2588,8 @@ public final class ResultsTable
     private static final java.util.Set<String> TAGGABLE_EXTENSIONS =
         java.util.Set.of(".mp4", ".m4v", ".mov", ".mkv", ".webm");
 
-    /** @return extension (with leading dot, lowercased) of the given filename. */
-    private static String extOf(String filename) {
-        if (filename == null) {
-            return "";
-        }
-        int dot = filename.lastIndexOf('.');
-        if (dot < 0) {
-            return "";
-        }
-        return filename.substring(dot).toLowerCase(java.util.Locale.ROOT);
-    }
-
-    /** @return extension (with leading dot, lowercased) of the given path's filename. */
-    private static String extOf(java.nio.file.Path p) {
-        if (p == null) {
-            return "";
-        }
-        String name = p.getFileName() != null ? p.getFileName().toString() : "";
-        return extOf(name);
-    }
-
-    /** @return the filename with its final extension stripped (or unchanged if no dot). */
-    private static String stripExt(String filename) {
-        if (filename == null) {
-            return "";
-        }
-        int dot = filename.lastIndexOf('.');
-        return dot < 0 ? filename : filename.substring(0, dot);
-    }
+    // Extension/base-name helpers live in StringUtils (lowerCaseExtension /
+    // stripExtension) — previously duplicated here and in MoveRunner.
 
     /**
      * Predict total work units for the unified progress bar.  Per file:
@@ -2633,7 +2606,7 @@ public final class ResultsTable
                 continue;
             }
             total += 1; // rename/move
-            String ext = extOf(m.getCurrentPath());
+            String ext = StringUtils.lowerCaseExtension(m.getCurrentPath());
             if (tagOn && TAGGABLE_EXTENSIONS.contains(ext)) {
                 total += 1;
             }
@@ -2660,9 +2633,9 @@ public final class ResultsTable
                 continue;
             }
             pending.add(new org.tvrenamer.controller.MoveRunner.PendingMove(
-                extOf(m.getCurrentPath()),
+                StringUtils.lowerCaseExtension(m.getCurrentPath()),
                 m.getMoveToDirectory(),
-                stripExt(m.getDesiredDestName())
+                StringUtils.stripExtension(m.getDesiredDestName())
             ));
         }
         int count = org.tvrenamer.controller.MoveRunner.predictMergeUnits(pending);

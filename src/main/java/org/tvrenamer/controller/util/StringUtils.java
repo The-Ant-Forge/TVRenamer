@@ -554,6 +554,55 @@ public class StringUtils {
     }
 
     /**
+     * Null-safe, lowercased file extension (with leading dot).  This is THE
+     * shared helper for extension comparison against lowercase constant sets
+     * — previously duplicated verbatim in MoveRunner and ResultsTable.
+     *
+     * @param filename the filename (may be null)
+     * @return the lowercased extension including the dot, or "" if none
+     */
+    public static String lowerCaseExtension(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0) {
+            return "";
+        }
+        return filename.substring(dot).toLowerCase(THIS_LOCALE);
+    }
+
+    /**
+     * Null-safe, lowercased file extension (with leading dot) of a Path's
+     * filename component.
+     *
+     * @param p the path (may be null)
+     * @return the lowercased extension including the dot, or "" if none
+     */
+    public static String lowerCaseExtension(java.nio.file.Path p) {
+        if (p == null || p.getFileName() == null) {
+            return "";
+        }
+        return lowerCaseExtension(p.getFileName().toString());
+    }
+
+    /**
+     * Null-safe final-extension strip.  Unlike {@link #getBaseName}, a
+     * leading-dot-only name like {@code ".srt"} yields the empty string —
+     * callers use emptiness as the "no usable base name" signal.
+     *
+     * @param filename the filename (may be null)
+     * @return everything before the last dot; "" for null input
+     */
+    public static String stripExtension(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        return dot < 0 ? filename : filename.substring(0, dot);
+    }
+
+    /**
      * Escape the five standard XML special characters.
      *
      * @param s the string to escape (may be null)
