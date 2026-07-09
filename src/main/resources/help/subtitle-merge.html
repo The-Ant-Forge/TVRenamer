@@ -111,7 +111,7 @@
     <ul>
         <li><strong>Tool not on PATH:</strong> the file moves normally without merged subtitles. Logged once per session.</li>
         <li><strong>Tool error or unsupported codec:</strong> logged, the file moves with its original (external) subtitles untouched.</li>
-        <li><strong>Atomic swap fails after merge</strong> (rare &mdash; usually transient AV/indexer locks): the merged temp file is preserved alongside the source as <code>&lt;source&gt;.merging.&lt;ext&gt;</code> for manual recovery. Look for it if a merge silently doesn't take effect.</li>
+        <li><strong>Atomic swap fails after merge</strong> (rare &mdash; usually transient AV/indexer locks): the merged temp file is preserved alongside the source as <code>&lt;name&gt;.merging.&lt;ext&gt;</code> (e.g. <code>Show S01E02.merging.mkv</code>) for manual recovery. Look for it if a merge silently doesn't take effect.</li>
         <li><strong>Move fails after merge:</strong> the merged source file remains where it is &mdash; a valid playable file. The user's original sibling subtitle files are NOT deleted unless the move succeeded.</li>
     </ul>
 
