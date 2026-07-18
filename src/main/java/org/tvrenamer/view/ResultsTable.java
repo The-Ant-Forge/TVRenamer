@@ -853,6 +853,12 @@ public final class ResultsTable
     // Guard against re-entrancy / multiple dialogs opening at once.
     private volatile boolean batchDisambiguationDialogOpen = false;
 
+    // While the batch disambiguation dialog applies its selections it persists
+    // overrides, which fires SHOW_NAME_OVERRIDES once per selection. Suppress the
+    // event-driven re-match during that window; the dialog issues a single
+    // explicit re-match of the affected rows afterwards instead.
+    private boolean suppressOverrideRematch = false;
+
     // Debounce reopening the batch dialog after the user cancels/closes it.
     // Pending ambiguities may still exist (by design), and ShowStore may notify again.
     // We treat the window close button as cancel, so both paths should cool down.
@@ -1065,20 +1071,27 @@ public final class ResultsTable
             );
 
             // Apply selections (persist + update prefs). We intentionally allow partial resolution.
-            for (Map.Entry<String, String> sel : selections.entrySet()) {
-                String queryString = sel.getKey();
-                String chosenId = sel.getValue();
-                if (queryString == null || queryString.isBlank()) {
-                    continue;
+            // Persisting an override fires SHOW_NAME_OVERRIDES once per selection; suppress the
+            // event-driven re-match during this window and run a single explicit pass below.
+            suppressOverrideRematch = true;
+            try {
+                for (Map.Entry<String, String> sel : selections.entrySet()) {
+                    String queryString = sel.getKey();
+                    String chosenId = sel.getValue();
+                    if (queryString == null || queryString.isBlank()) {
+                        continue;
+                    }
+                    if (chosenId == null || chosenId.isBlank()) {
+                        continue;
+                    }
+                    ShowStore.applyShowDisambiguationSelection(
+                        queryString,
+                        chosenId
+                    );
+                    resolvedQueryStrings.add(queryString);
                 }
-                if (chosenId == null || chosenId.isBlank()) {
-                    continue;
-                }
-                ShowStore.applyShowDisambiguationSelection(
-                    queryString,
-                    chosenId
-                );
-                resolvedQueryStrings.add(queryString);
+            } finally {
+                suppressOverrideRematch = false;
             }
 
             // Remove only resolved items; keep unresolved pending so the user can reopen via the button later.
@@ -1086,105 +1099,22 @@ public final class ResultsTable
                 ShowStore.removePendingDisambiguations(resolvedQueryStrings);
             }
 
-            // Re-trigger lookup for each affected item based on provider query string rather than
-            // the extracted show name. This avoids mismatches where the extracted name varies
-            // (punctuation/case/overrides) but the underlying query string is what we actually
-            // disambiguate and persist.
-            HashSet<String> affectedQueryStrings = new HashSet<>(
+            // Re-trigger lookup for each affected item, matched on the provider query string
+            // (derived from the effective, override-applied show name) rather than the raw
+            // extracted name -- that is what we disambiguate and persist.
+            final HashSet<String> affectedQueryStrings = new HashSet<>(
                 resolvedQueryStrings
             );
             if (affectedQueryStrings.isEmpty()) {
                 return true;
             }
-
-            for (final TableItem item : swtTable.getItems()) {
-                String fileNameKey = CURRENT_FILE_FIELD.getCellText(item);
-                final FileEpisode episode = episodeMap.get(fileNameKey);
-                if (episode == null) {
-                    continue;
-                }
-                if (!episode.wasParsed()) {
-                    continue;
-                }
-
-                final String extractedShow = episode.getExtractedFilenameShow();
-                if (StringUtils.isBlank(extractedShow)) {
-                    continue;
-                }
-
-                // Compute the provider query string the same way ShowName/ShowStore does.
-                final String queryString = StringUtils.makeQueryString(
-                    extractedShow
-                );
-                if (!affectedQueryStrings.contains(queryString)) {
-                    continue;
-                }
-
-                // Reset to "downloading" while we re-resolve show
-                STATUS_FIELD.setCellImage(item, DOWNLOADING);
-
-                ShowStore.mapStringToShow(
-                    extractedShow,
-                    new ShowInformationListener() {
-                        @Override
-                        public void downloadSucceeded(Show show) {
-                            episode.setEpisodeShow(show);
-                            display.asyncExec(() -> {
-                                if (tableContainsTableItem(item)) {
-                                    setProposedDestColumn(item, episode);
-                                    STATUS_FIELD.setCellImage(item, ADDED);
-                                }
-                            });
-                            if (show.isValidSeries()) {
-                                getSeriesListings(
-                                    show.asSeries(),
-                                    item,
-                                    episode
-                                );
-                            }
-                        }
-
-                        @Override
-                        public void downloadFailed(FailedShow failedShow) {
-                            episode.setFailedShow(failedShow);
-
-                            // Same logic as above: suppress "show selection required" failures
-                            // because they'll be resolved via the batch disambiguation dialog.
-                            String msg = null;
-                            try {
-                                msg = failedShow.toString();
-                            } catch (Exception e) {
-                                logger.fine("Could not get failure message: " + e.getMessage());
-                            }
-                            if (
-                                msg != null &&
-                                msg
-                                    .toLowerCase(Locale.ROOT)
-                                    .contains("show selection required")
-                            ) {
-                                display.asyncExec(() -> {
-                                    if (tableContainsTableItem(item)) {
-                                        STATUS_FIELD.setCellImage(
-                                            item,
-                                            DOWNLOADING
-                                        );
-                                    }
-                                });
-                                return;
-                            }
-
-                            tableItemFailed(item, episode);
-                        }
-
-                        @Override
-                        public void apiHasBeenDeprecated() {
-                            noteApiFailure();
-                            episode.setApiDiscontinued();
-                            tableItemFailed(item, episode);
-                        }
-                    }
-                );
-            }
+            rematchRows(episode ->
+                affectedQueryStrings.contains(
+                    StringUtils.makeQueryString(
+                        prefs.resolveShowName(episode.getExtractedFilenameShow())
+                    )
+                )
+            );
 
             return true;
         } finally {
@@ -1723,10 +1653,21 @@ public final class ResultsTable
     }
 
     /**
-     * Re-lookup unfound shows whose effective show name changed due to an
-     * override update.  Called when the SHOW_NAME_OVERRIDES preference fires.
+     * Re-run the provider show match for every table row selected by the given
+     * predicate, re-rendering its proposed destination when the lookup
+     * completes.  Used both when the Matching preferences change (overrides /
+     * disambiguations) and after the batch disambiguation dialog resolves.
+     *
+     * Each selected row is re-resolved by its current effective (override-
+     * applied) show name, so both name overrides and disambiguation overrides
+     * key consistently with the parse-time lookup.  Provider callbacks are
+     * marshalled to the UI thread and guard against rows removed mid-flight.
+     * "Show selection required" failures are left in the downloading state so
+     * the batch disambiguation dialog can resolve them.
+     *
+     * @param selector chooses which episodes to re-match
      */
-    private void retryUnfoundShowsAfterOverrideChange() {
+    private void rematchRows(final java.util.function.Predicate<FileEpisode> selector) {
         if (swtTable.isDisposed()) {
             return;
         }
@@ -1734,21 +1675,24 @@ public final class ResultsTable
             if (item.isDisposed()) {
                 continue;
             }
-            final Object data = item.getData(EPISODE_DATA_KEY);
-            if (!(data instanceof FileEpisode ep)) {
+            String fileNameKey = CURRENT_FILE_FIELD.getCellText(item);
+            final FileEpisode ep = episodeMap.get(fileNameKey);
+            if (ep == null || !ep.wasParsed()) {
                 continue;
             }
-            if (!ep.isShowUnfound()) {
-                continue;
-            }
-
-            String extractedName = ep.getExtractedFilenameShow();
-            String newName = prefs.resolveShowName(extractedName);
-            if (newName.equals(ep.getFilenameShow())) {
-                // Override didn't change this episode's lookup name.
+            if (!selector.test(ep)) {
                 continue;
             }
 
+            final String extractedName = ep.getExtractedFilenameShow();
+            if (StringUtils.isBlank(extractedName)) {
+                continue;
+            }
+
+            // Re-resolve the effective (override-applied) lookup name so the
+            // query string matches how this row was originally parsed and
+            // disambiguated.
+            final String newName = prefs.resolveShowName(extractedName);
             ep.setFilenameShow(newName);
             ShowName.mapShowName(newName);
             STATUS_FIELD.setCellImage(item, DOWNLOADING);
@@ -1779,6 +1723,30 @@ public final class ResultsTable
                     @Override
                     public void downloadFailed(FailedShow failedShow) {
                         ep.setFailedShow(failedShow);
+
+                        // Suppress "show selection required" failures: those are
+                        // resolved via the batch disambiguation dialog, so keep
+                        // the row downloading rather than marking it failed.
+                        String msg = null;
+                        try {
+                            msg = failedShow.toString();
+                        } catch (Exception e) {
+                            logger.fine("Could not get failure message: " + e.getMessage());
+                        }
+                        if (
+                            msg != null &&
+                            msg
+                                .toLowerCase(Locale.ROOT)
+                                .contains("show selection required")
+                        ) {
+                            display.asyncExec(() -> {
+                                if (tableContainsTableItem(item)) {
+                                    STATUS_FIELD.setCellImage(item, DOWNLOADING);
+                                }
+                            });
+                            return;
+                        }
+
                         tableItemFailed(item, ep);
                     }
 
@@ -1815,7 +1783,13 @@ public final class ResultsTable
                 Fields.setThemeMode(prefs.getThemeMode());
                 break;
             case SHOW_NAME_OVERRIDES:
-                retryUnfoundShowsAfterOverrideChange();
+                // Re-match rows that are unmatched or whose result would change
+                // under the new overrides/disambiguations. Suppressed while the
+                // batch disambiguation dialog applies its own selections (it runs
+                // an explicit affected-row re-match afterwards).
+                if (!suppressOverrideRematch) {
+                    rematchRows(ep -> ep.rematchWouldChangeResult(prefs));
+                }
                 break;
             case IGNORE_REGEX:
             case PRELOAD_FOLDER:

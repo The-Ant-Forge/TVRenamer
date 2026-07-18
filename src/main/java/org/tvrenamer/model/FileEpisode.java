@@ -660,6 +660,59 @@ public class FileEpisode {
         return seriesStatus == SeriesStatus.UNFOUND;
     }
 
+    /**
+     * Decide whether re-running the show match for this episode could produce a
+     * different result under the current preferences.  Used to select which
+     * table rows to re-match when show-name overrides or disambiguation
+     * overrides change (fired via {@code SHOW_NAME_OVERRIDES}).
+     *
+     * A row qualifies if any of the following holds:
+     * <ul>
+     * <li>it is currently unmatched (worth retrying);</li>
+     * <li>a name override now resolves its extracted name to a different
+     *     effective lookup name than the one currently in use;</li>
+     * <li>a disambiguation override now pins a provider series id that differs
+     *     from the series this episode is currently matched to.</li>
+     * </ul>
+     *
+     * The check compares resolution <em>inputs</em> (resolved name and pinned
+     * id) against current state, so rows whose outcome cannot change are
+     * skipped without issuing any provider query.
+     *
+     * @param prefs the current user preferences
+     * @return true if re-matching might change this episode's matched show
+     */
+    public boolean rematchWouldChangeResult(final UserPreferences prefs) {
+        if (!wasParsed()) {
+            return false;
+        }
+        final String extracted = getExtractedFilenameShow();
+        if (StringUtils.isBlank(extracted)) {
+            return false;
+        }
+        // Currently unmatched: always worth retrying under the new rules.
+        if (isShowUnfound()) {
+            return true;
+        }
+        // A name override now resolves to a different effective lookup name.
+        final String resolvedName = prefs.resolveShowName(extracted);
+        if (!resolvedName.equals(filenameShow)) {
+            return true;
+        }
+        // A disambiguation override now pins a different provider series.
+        // (resolvedName == filenameShow here, so the query string matches the
+        // one used when this row was originally resolved.)
+        final String pinnedId = prefs.resolveDisambiguatedSeriesId(
+            StringUtils.makeQueryString(resolvedName)
+        );
+        if (pinnedId != null) {
+            final String currentId =
+                (actualShow == null) ? null : actualShow.getIdString();
+            return !pinnedId.equals(currentId);
+        }
+        return false;
+    }
+
     private String getShowNamePlaceholder() {
         return "<" + actualShow.getName() + ">";
     }
