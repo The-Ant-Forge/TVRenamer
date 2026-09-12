@@ -801,6 +801,20 @@ Completes the code improvement opportunities document (all 24 items done).
   - Added a troubleshooting note (`troubleshooting.html`) and a new "Data Provider" section
     (`preferences.html`) documenting the setting, plus a "Data providers" subsection in
     `README.md`.
+  - Pre-release fixes and polish, found in live testing before v1.0.351 shipped:
+    - Switching providers had silently re-used each unfound row's cached failure (the
+      query string does not change with the provider), so the retry never reached the new
+      provider. The switch path now forgets the cached failure for each row it retries.
+    - The DVD fallback now also triggers when v4 signals "no DVD ordering" with an error
+      status, not only with an empty `200` response.
+    - `TvdbV4Client` rethrows `TVRenamerIOException` unchanged instead of wrapping it
+      again, so error messages are no longer double-wrapped.
+    - The Validate status label was created empty with `SWT.BEGINNING` alignment, so
+      GridLayout gave it almost no width and later results were clipped to nothing. It now
+      uses `SWT.FILL` and a helper that re-lays out the row after each update.
+    - The API-key field itself is tinted green or red after validation, using theme-aware
+      colours owned by `ThemePalette`. The tint clears when the key is edited, a new
+      validation starts, or the provider changes.
 - **Notes:**
   - v1 remains the keyless default; v4 is strictly opt-in and requires a personal API key
     from TheTVDB (never shipped in the repo).
@@ -858,6 +872,15 @@ Completes the code improvement opportunities document (all 24 items done).
     so a live refresh would need to invalidate that cache and the display-name override
     together — deferred, see `docs/TODO.md`).
   - Documented the setting in `preferences.html`, `troubleshooting.html`, and `README.md`.
+  - Pre-release fixes, found in review before v1.0.364 shipped:
+    - The destination folder still used the original show name while the filename and
+      metadata tags used the translated one, because `Show.getDirName()` was derived from
+      the cached original name. It is now derived on demand from `getName()`, so folder,
+      filename and tags all use the chosen language.
+    - `V4Parser.parseTranslationName` and `parseEpisodes` let Gson's unchecked
+      `JsonSyntaxException` escape on a malformed `200` body, which skipped the
+      translation and no-language fallbacks. They now return no name (translation) or an
+      empty page (episodes), so the fallbacks still run.
 - **Notes:**
   - v1 is untouched — it stays fixed to English (`/all/en.xml`) and the dropdown is
     disabled when v1 is selected.
