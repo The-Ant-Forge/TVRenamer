@@ -989,6 +989,88 @@ Completes the code improvement opportunities document (all 24 items done).
 
 ---
 
+### 63) Distinct READY and COMPLETED status icons
+- **Why:** The status column used the plain tick for two different moments. It appeared as
+  soon as a file parsed, so a row read as "done" before any work had run, and after a
+  successful move the row was left on the moving arrow indefinitely instead of reaching a
+  final state.
+- **Where:** `org.tvrenamer.view.ItemState`, `org.tvrenamer.view.ResultsTable`
+  (`finishMove`).
+- **What we did:**
+  - Split the vocabulary into a pre-pipeline READY state (solid green circle: approved and
+    staged) and a post-pipeline COMPLETED state (green circle with a check: fully done).
+  - `ResultsTable.finishMove` sets COMPLETED on a successful move, so the row visibly
+    reaches its final state before it is auto-cleared or cleared by hand.
+  - FAIL became a solid red circle, pairing with READY's green for a traffic-light reading.
+  - SUCCESS (the plain tick) is kept for the Preferences Matching tab, where it marks a
+    validated form row rather than a pipeline stage.
+- **Notes:**
+  - Supersedes the "Tick icon consistency" change recorded in #22, which had
+    stopped setting COMPLETED after a move.
+  - Shipped 2026-04-27 (`8992914b`); recorded retroactively.
+
+---
+
+### 64) Post-batch subtitle merge limited to files in the batch
+- **Why:** The post-batch subtitle step built its candidate list by walking every file in
+  each destination folder the batch moved into. Media that already sat in those folders,
+  and that the user never added to the batch, had matching sibling subtitles silently
+  merged into it: a user-trust bug.
+- **Where:** `org.tvrenamer.controller.MoveRunner`.
+- **What we did:**
+  - Replaced the directory walk with a strict per-move candidate set. Moving a media
+    container makes its destination path the candidate. Moving a subtitle file looks only
+    for media at the destination whose canonical base name plus "." prefixes the
+    subtitle's name, which keeps the "rename a subtitle into a folder that already holds
+    its media" workflow working without touching unrelated files.
+  - Removed the container-extension filter in the candidate loop (added in #55, when
+    candidates could include subtitle files); the new set only ever contains containers.
+- **Notes:**
+  - Shipped 2026-05-25 (`a7de9d82`); recorded retroactively.
+
+---
+
+### 65) Sortable Matching tables; targeted re-match on Save fixed
+- **Why:** The Overrides and Disambiguations tables could not be sorted, which made long
+  lists hard to scan. Separately, re-matching after a Matching change appeared to work only
+  when Preferences was opened from the main table's "click to set Hint" link. That link
+  only appears on rows whose show was not found, and the re-match rule always re-matches
+  such rows, so that path looked reliable while real gaps went unnoticed: removing a
+  disambiguation pin never re-matched anything, every Save ran a re-match pass even with
+  no Matching edits, and the two maps were applied separately, so the first pass ran with
+  new name overrides but stale disambiguations.
+- **Where:** `org.tvrenamer.view.PreferencesDialog` (sorting, `MatchingRow`, header state),
+  `org.tvrenamer.view.MatchingTableSorter` (new), `org.tvrenamer.view.ThemePalette`
+  (disabled header colours), `org.tvrenamer.model.UserPreferences`
+  (`setMatchingOverrides`, change detection), `org.tvrenamer.model.FileEpisode`
+  (`pinnedSeriesIdAtMatch`, `rematchWouldChangeResult`).
+- **What we did:**
+  - Clicking either value column header sorts that table, and clicking again reverses it,
+    with the native sort arrow. Ordering is case-insensitive and null-safe, with an
+    exact-case tie-break so repeated sorts agree. It lives in `MatchingTableSorter`, which
+    has no SWT dependency and is unit-tested.
+  - Rows are reordered by moving their contents between the existing `TableItem`s, carrying
+    every piece of per-row state (cells, icon, dirty flag, validation message, validation
+    token), rather than disposing and recreating items.
+  - While any row in a table is validating, header clicks are ignored and the header is
+    painted a dimmed grey. An in-flight validation resolves against a specific `TableItem`,
+    so reordering underneath it would land the result on the wrong row. SWT colours the
+    whole header row (there is no per-column header colour), which matches the behaviour:
+    sorting is off for the whole table.
+  - `FileEpisode` records the disambiguation pin in effect when a row matched, so
+    `rematchWouldChangeResult` can tell a removed pin (re-match) from a row that was never
+    pinned (leave alone).
+  - The show-name and disambiguation setters fire a preference change only when their map
+    actually changed, and a combined `setMatchingOverrides` applies both maps before firing
+    a single event.
+- **Notes:**
+  - Sorting then saving writes the sorted order to the preferences file. Both maps are
+    keyed lookups with case-insensitively unique keys, so the order has no effect on
+    matching.
+  - Shipped 2026-09-05 (`7f0669de`); recorded retroactively.
+
+---
+
 ## Related records
 
 - Per-release notes are stored as versioned Markdown files:
