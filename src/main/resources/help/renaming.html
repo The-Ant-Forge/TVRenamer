@@ -121,9 +121,9 @@
     </div>
 
     <h2>Ambiguous Episode Titles</h2>
-    <p>Some shows have different episode titles between aired and DVD orderings. When an
-       episode number matches titles from both orderings, TVRenamer shows a dropdown with
-       both options so you can choose the correct one.</p>
+    <p>Occasionally the data provider lists more than one episode under the same season and
+       episode number. When that happens, TVRenamer shows a dropdown with each candidate
+       title so you can choose the correct one.</p>
 
     <h3>Automatic Title Selection</h3>
     <p>TVRenamer can often pick the right title automatically:</p>
@@ -151,8 +151,9 @@
     <div class="note">
         <strong>Note:</strong> Some shows have different episode numbering between aired and DVD releases.
         If your files use DVD numbering, enable "Prefer DVD episode order if present" (with the TheTVDB v4
-        provider). The <strong>TVMaze</strong> provider offers a single episode ordering, so this setting
-        has no effect under TVMaze.
+        provider). Changing it refreshes shows already in the table, so their rows are re-matched in
+        the new order. TVRenamer reads <strong>TVMaze</strong> in its standard aired order, so the
+        setting is disabled when TVMaze is selected.
     </div>
 
     <hr>

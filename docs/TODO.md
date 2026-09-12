@@ -22,6 +22,25 @@ This document consolidates "future work" notes from the codebase. Notes are grou
 - Likely UI location:
   - unified "Show Matching Rules" editor alongside Overrides and Disambiguations
 
+### Episode ordering dropdown (deferred)
+**Context:** Investigated 2026-09-12: replacing the "Prefer DVD episode order" checkbox with a
+dropdown of orderings. TheTVDB v4 defines seven season types (Aired, DVD, Absolute,
+Alternate, Regional, Alternate DVD, Alternate Order 2), each selectable through the
+`{season-type}` path segment `TheTVDBv4Provider` already uses, so fetching a different
+ordering is a one-line change. TVMaze has per-show alternate lists
+(`/shows/{id}/alternatelists`), each tagged by kind: DVD release, streaming premiere,
+country premiere, broadcast premiere, language premiere, verbatim order.
+**Why deferred:** Across 30 real v4 series, DVD existed for 17, Alternate for 1, and the
+other three types for none. Streaming-service orders have no dedicated type, so one entered
+under a generic type is unlabelled. An advertised type can come back empty, and an Alternate
+order can be partial (one series: 32 aired episodes in 5 seasons versus 18 in 2), which the
+current empty-list-only fallback to aired cannot handle. A 25-show TVMaze sample found only
+country-premiere lists, which mostly change air dates, not numbering.
+**If revisited:** Prefer a per-show ordering override to a global setting, since files for
+different shows arrive in different orders; add a per-episode fallback for partial
+orderings; and check what season numbers v4 returns for Absolute.
+**Effort:** Medium (global dropdown) to Large (per-show override)
+
 ---
 
 ## Code Reliability & Maintenance
@@ -121,16 +140,6 @@ layer in front of `TvMazeClient` (or a longer backoff/second retry) instead of t
 current single-retry-then-fail behavior. Known limitation for now, not yet reported
 as an actual problem.
 **Effort:** Small/Medium
-
-### Title language live refresh (v4 provider)
-**Context:** The v4 Title language setting (`docs/Completed.md` #59) applies only to
-files matched after the setting changes — already-loaded rows are not retroactively
-re-translated. Episode listings are cached per `Series`, so a live refresh would need
-to invalidate both the `Series` listings cache and the display-name override for
-affected rows before re-issuing language-qualified fetches.
-**Action:** Live retroactive re-translation of already-loaded rows when Title language
-changes (needs Series listings-cache + display-name-override invalidation).
-**Effort:** Medium
 
 ---
 

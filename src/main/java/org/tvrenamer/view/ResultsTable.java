@@ -859,6 +859,11 @@ public final class ResultsTable
     // explicit re-match of the affected rows afterwards instead.
     private boolean suppressOverrideRematch = false;
 
+    // One Save can change both the ordering and the title language, firing two
+    // preference events; this collapses them into a single listing refresh (see
+    // scheduleListingRefresh). Only read and written on the UI thread.
+    private boolean listingRefreshPending = false;
+
     // Debounce reopening the batch dialog after the user cancels/closes it.
     // Pending ambiguities may still exist (by design), and ShowStore may notify again.
     // We treat the window close button as cancel, so both paths should cool down.
@@ -1672,6 +1677,34 @@ public final class ResultsTable
     }
 
     /**
+     * Refresh every row already matched to a show, so a change to the episode
+     * ordering or title language reaches rows already in the table, not just
+     * files added afterwards.
+     *
+     * Deferred with asyncExec so a Save that changes several such settings runs
+     * one refresh, after all of them are applied. The provider is checked then,
+     * against the final settings: TVMaze ignores both, so nothing happens there.
+     */
+    private void scheduleListingRefresh() {
+        if (listingRefreshPending || display.isDisposed()) {
+            return;
+        }
+        listingRefreshPending = true;
+        display.asyncExec(() -> {
+            listingRefreshPending = false;
+            if (!prefs.getEpisodeDataProvider().supportsOrderingAndLanguage()) {
+                return;
+            }
+            // A cached Series keeps its downloaded listing (addListingsListener
+            // short-circuits once it has one), and the query cache holds those
+            // Series. Drop both, or the re-match hands rows the old listing back.
+            Series.clearKnownSeries();
+            ShowName.clearAllQueryCache();
+            rematchRows(FileEpisode::hasResolvedShow);
+        });
+    }
+
+    /**
      * As {@link #rematchRows(java.util.function.Predicate)}, but optionally
      * forgets any cached FAILED lookup for each re-matched row before querying.
      *
@@ -1831,21 +1864,25 @@ public final class ResultsTable
                 ShowName.clearAllQueryCache();
                 rematchRows(FileEpisode::isShowUnfound, true);
                 break;
+            case PREFER_DVD_ORDER:
+            case TITLE_LANGUAGE:
+                // Both shape the listings TheTVDB v4 returns, and listings are
+                // cached per Series, so rows already in the table would keep the
+                // old ordering or language. Refresh them, once per Save.
+                scheduleListingRefresh();
+                break;
             case IGNORE_REGEX:
             case PRELOAD_FOLDER:
             case ADD_SUBDIRS:
             case REMOVE_EMPTY:
             case DELETE_ROWS:
             case UPDATE_CHECK:
-            case PREFER_DVD_ORDER:
             case FILE_MTIME_POLICY:
             case OVERWRITE_DESTINATION:
             case CLEANUP_DUPLICATES:
             case TAG_VIDEO_METADATA:
             case TVDB_V4_API_KEY:
-            case TITLE_LANGUAGE:
                 // These changes don't require an immediate table update here
-                // (title language applies to files matched after the change)
                 break;
         }
     }

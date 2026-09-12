@@ -18,6 +18,18 @@ public enum EpisodeDataProviderType {
         return label;
     }
 
+    /**
+     * Whether this provider honours the episode-ordering and title-language
+     * preferences.
+     *
+     * @return true if those settings affect the listings this provider returns
+     */
+    public boolean supportsOrderingAndLanguage() {
+        // TVMaze has a single aired ordering and English-only titles; only
+        // TheTVDB v4 fetches by season type (aired or DVD) and by language.
+        return this == TVDB_V4;
+    }
+
     public static EpisodeDataProviderType fromString(String value) {
         if (value == null) {
             return null;

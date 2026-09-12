@@ -1005,7 +1005,14 @@ class PreferencesDialog extends Dialog {
             .equals(providerCombo.getText());
         tvdbV4KeyText.setEnabled(v4);
         tvdbV4ValidateButton.setEnabled(v4);
-        titleLanguageCombo.setEnabled(v4);
+        // Ordering and title language only matter for a provider that honours
+        // them; see EpisodeDataProviderType.supportsOrderingAndLanguage().
+        EpisodeDataProviderType selected =
+            EpisodeDataProviderType.fromString(providerCombo.getText());
+        boolean orderingAndLanguage =
+            selected != null && selected.supportsOrderingAndLanguage();
+        titleLanguageCombo.setEnabled(orderingAndLanguage);
+        preferDvdOrderCheckbox.setEnabled(orderingAndLanguage);
         // Switching providers makes any prior validation result stale.
         resetTvdbV4KeyValidationTint();
     }

@@ -84,6 +84,9 @@
         <li><strong>Aired</strong> - Original broadcast order (recommended for most uses)</li>
         <li><strong>DVD</strong> - DVD/BluRay release order (some shows reorder episodes)</li>
     </ul>
+    <p>Only used when <strong>TheTVDB (v4)</strong> is selected; the setting is disabled for
+    <strong>TVMaze</strong>, which TVRenamer always reads in aired order. Changing it refreshes
+    shows already in the table, so their rows are re-matched in the new order.</p>
 
     <h2>Data Provider</h2>
 
@@ -115,8 +118,9 @@
         <li>Some shows have a translated show name but only original-language episode titles
             &mdash; this is a data-completeness limitation of TheTVDB, not a bug.</li>
     </ul>
-    <p>Changing this setting affects files matched <em>after</em> the change; it does not
-    retroactively re-translate titles for rows already shown in the table.</p>
+    <p>Changing this setting refreshes shows already in the table: their listings are fetched
+    again in the new language and their rows re-matched, so existing rows pick up the new titles
+    too, not just files added afterwards.</p>
 
     <div class="tip">
         <strong>Tip:</strong> If a show you know exists consistently returns "No info", try

@@ -1094,6 +1094,46 @@ Completes the code improvement opportunities document (all 24 items done).
 
 ---
 
+### 66) Episode ordering and Title language changes refresh already-loaded rows
+- **Why:** Changing "Prefer DVD episode order" or the TheTVDB v4 Title language only
+  affected files matched afterwards. Rows already in the table kept the old ordering or
+  language, because episode listings are cached per `Series` (`addListingsListener`
+  short-circuits once a listing has downloaded), so re-matching a row handed it the old
+  listing back. The DVD checkbox was also left enabled under TVMaze, where it does nothing.
+- **Where:** `org.tvrenamer.view.ResultsTable` (`scheduleListingRefresh`, the
+  `PREFER_DVD_ORDER`/`TITLE_LANGUAGE` cases), `org.tvrenamer.model.FileEpisode`
+  (`hasResolvedShow`), `org.tvrenamer.model.EpisodeDataProviderType`
+  (`supportsOrderingAndLanguage`), `org.tvrenamer.view.PreferencesDialog`
+  (`updateProviderControlsEnabled`), `renaming.html`, `preferences.html`, `docs/TODO.md`.
+- **What we did:**
+  - When either setting changes under TheTVDB v4, clear the known-series and query caches
+    (the same pair a provider switch clears) and re-match every row already matched to a
+    show, so its listing is fetched again in the new order or language.
+  - The refresh is deferred with `asyncExec`, so a Save that changes both settings runs one
+    refresh after both are applied; the provider is checked at that point, against the
+    final settings.
+  - `FileEpisode.hasResolvedShow()` selects the rows: any row matched to a show, including
+    one whose listing is still downloading (it would otherwise finish in the old order) and
+    one whose episode number found no match (a different order may match it). It is an
+    exhaustive switch over the row status, so adding a status forces a decision there.
+  - `EpisodeDataProviderType.supportsOrderingAndLanguage()` is the single source of truth
+    for which provider honours these settings. It drives both the refresh and the dialog,
+    which now disables the DVD checkbox under TVMaze alongside Title language.
+  - Help: corrected the claim that TVMaze "offers a single episode ordering" and the stated
+    cause of the ambiguous-title dropdown (duplicate numbers from the provider, no longer
+    aired versus DVD), and documented the refresh. Closed the "Title language live refresh"
+    TODO, and recorded the investigation of an episode-ordering dropdown as a deferred TODO.
+- **Notes:**
+  - Each refresh re-searches and re-downloads every loaded show (about two v4 requests per
+    distinct show), and episode titles picked by hand on affected rows are reset.
+  - A listing download already in flight when the setting changes can still deliver a late
+    callback. `listingsComplete()` always reads the row's current show, so at worst the row
+    briefly shows "no listings" until the new listing arrives and corrects it.
+  - The two model methods are unit-tested; the refresh wiring lives in the untested `view/`
+    layer and is not covered by automated tests.
+
+---
+
 ## Related records
 
 - Per-release notes are stored as versioned Markdown files:

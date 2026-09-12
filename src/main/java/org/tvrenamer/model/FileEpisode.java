@@ -680,6 +680,19 @@ public class FileEpisode {
     }
 
     /**
+     * @return true once this row has been matched to a show, whether or not its
+     *     listings have arrived (or produced an episode match) yet
+     */
+    public synchronized boolean hasResolvedShow() {
+        // Resolved means matched to a show, whatever has happened to its listings
+        // since. Exhaustive on purpose: adding a status forces a decision here.
+        return switch (seriesStatus) {
+            case GOT_SHOW, NO_LISTINGS, NO_MATCH, GOT_LISTINGS -> true;
+            case UNFOUND, NOT_STARTED -> false;
+        };
+    }
+
+    /**
      * Decide whether re-running the show match for this episode could produce a
      * different result under the current preferences.  Used to select which
      * table rows to re-match when show-name overrides or disambiguation
