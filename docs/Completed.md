@@ -1124,6 +1124,7 @@ Completes the code improvement opportunities document (all 24 items done).
     aired versus DVD), and documented the refresh. Closed the "Title language live refresh"
     TODO, and recorded the investigation of an episode-ordering dropdown as a deferred TODO.
 - **Notes:**
+  - Completes the Title language live refresh that #59 deliberately deferred.
   - Each refresh re-searches and re-downloads every loaded show (about two v4 requests per
     distinct show), and episode titles picked by hand on affected rows are reset.
   - A listing download already in flight when the setting changes can still deliver a late
