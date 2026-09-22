@@ -45,6 +45,38 @@ orderings; and check what season numbers v4 returns for Absolute.
 
 ## Code Reliability & Maintenance
 
+### Action button sometimes disabled while rows are matched and ready
+**Reported 2026-09-22, not reproduced.** Rows had matched, their checkboxes were ticked,
+and the action button showed no hover highlight and did nothing when clicked. No hover
+highlight means the button was disabled, and a disabled SWT button fires no event, which
+is consistent with none of `renameFiles()`'s skip-path log lines appearing.
+
+**Leading hypothesis:** `ResultsTable.setActionButtonText` disables the button outright
+whenever the move half is impossible (`prefs.isMoveEnabled()` false because
+`destDirProblem` is set by `UserPreferences.ensureDestDir`), even when Rename is enabled
+and renaming in place would still work. `destDirProblem` is set when
+`FileUtilities.checkForCreatableDirectory` fails for the destination, and the destination
+is re-validated on the preference-change path, so saving Preferences can disable the
+button as a side effect. With a network destination that is intermittently unavailable
+this would come and go. The tooltip that would explain it is set on a disabled control,
+and Windows suppresses tooltips there, so the user sees no reason.
+
+**Evidence so far:** two sessions captured with FINE logging did not reproduce it. In
+both, destination validation passed and no move was ever started, so neither candidate
+cause was exercised.
+
+**Blocker for self-diagnosis:** `-Dtvrenamer.debug=true` cannot capture this today.
+`logging.properties` pins the root logger at `INFO` and `ensureFileLoggingAttached`
+deliberately does not raise it, so every `FINE` record is dropped before reaching the log
+file. Capturing the evidence currently requires layering a patched logging config onto
+the classpath. Fix this first, otherwise the next occurrence is unobservable again.
+
+**Candidate fixes:** raise the log level when debug is enabled; degrade to rename-only
+instead of disabling the button when rename is enabled but move is impossible; surface
+the reason somewhere visible rather than in a suppressed tooltip; re-check the
+destination when it becomes reachable again.
+**Effort:** Small (logging) to Medium (button behaviour)
+
 ### Verify SWT-OS/SWT-Arch manifest workaround can be removed
 **Context:** `build.gradle` injects `SWT-OS`/`SWT-Arch` manifest attributes into
 both fat jars as a workaround for SWT's `isLoadable()` check (background in

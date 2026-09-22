@@ -1135,6 +1135,44 @@ Completes the code improvement opportunities document (all 24 items done).
 
 ---
 
+### 67) New Matching entries insert at the top; Add/Update actually updates
+- **Why:** A newly added Overrides or Disambiguations entry was appended to the bottom
+  of the table, out of view in a long list, so the user could not see what they had just
+  added. While implementing that, a latent bug surfaced: "Add / Update" could never
+  update an existing entry. Its duplicate-key lookup read column 0, the status-icon
+  column, which is always empty, instead of column 1 where the key lives. The lookup
+  therefore never matched and every update appended a duplicate row. The resulting
+  unreachable update branch was wrong too: it wrote only two cells, which would have put
+  the key in the icon column.
+- **Where:** `org.tvrenamer.view.MatchingTableKeys` (new, SWT-free key lookup),
+  `org.tvrenamer.view.PreferencesDialog` (`upsertMatchingRow` and `rowCells` replace the
+  two near-identical upserts; both Add/Update handlers).
+- **What we did:**
+  - New entries insert at row 0, and any active column sort is cleared at the same time,
+    so the header arrow cannot contradict the order the row was placed in.
+  - Extracted the key lookup into `MatchingTableKeys.indexOfKey`, which searches the key
+    column case-insensitively, ignores surrounding whitespace, and skips null or short
+    rows. It has no SWT dependency and is unit-tested, including a regression test that
+    the status-icon column is never searched.
+  - A row the user has explicitly selected stays the edit target whatever its key, which
+    is the existing click-a-row-to-edit flow.
+  - `upsertMatchingRow` returns the index of the row it added or updated, and the
+    handlers validate that row. They previously validated `getItemCount() - 1`, an
+    assumption that only held while entries were appended.
+  - Deliberately did not auto-select the new row. It would have made the validation
+    index fall out for free, but a selected row makes the next Add/Update overwrite it
+    rather than add, and selecting also reloads the edit fields.
+  - The two upsert methods were duplicates of each other and now share one
+    implementation, so the dialog is smaller than before this change.
+- **Notes:**
+  - Saving writes the table's current order to the preferences file, so new entries stay
+    at the top when Preferences is reopened. Harmless, since both maps are keyed lookups.
+  - Investigated alongside a report of the action button being disabled while rows were
+    matched and ticked. That is unrelated to this change and remains unreproduced; it is
+    recorded in `docs/TODO.md`.
+
+---
+
 ## Related records
 
 - Per-release notes are stored as versioned Markdown files:

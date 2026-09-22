@@ -1724,20 +1724,19 @@ class PreferencesDialog extends Dialog {
                     if (from.isEmpty() || to.isEmpty()) {
                         return;
                     }
-                    upsertOverride(from, to);
+                    int idx = upsertOverride(from, to);
                     overridesFromText.setText("");
                     overridesToText.setText("");
 
-                    // Validate the selected row (or the upserted row) asynchronously.
-                    int idx = overridesTable.getSelectionIndex();
-                    if (idx < 0) {
-                        idx = overridesTable.getItemCount() - 1;
+                    // Validate exactly the row that was added or updated: a new
+                    // row goes to the top, so the old "last row" guess is wrong.
+                    if (idx >= 0) {
+                        validateMatchingRowOnline(
+                            overridesTable,
+                            idx,
+                            MatchingRowType.OVERRIDE
+                        );
                     }
-                    validateMatchingRowOnline(
-                        overridesTable,
-                        idx,
-                        MatchingRowType.OVERRIDE
-                    );
                 }
             }
         );
@@ -1986,20 +1985,19 @@ class PreferencesDialog extends Dialog {
                     if (q.isEmpty() || id.isEmpty()) {
                         return;
                     }
-                    upsertDisambiguation(q, id);
+                    int idx = upsertDisambiguation(q, id);
                     disambiguationsQueryText.setText("");
                     disambiguationsIdText.setText("");
 
-                    // Validate the selected row (or the upserted row) asynchronously.
-                    int idx = disambiguationsTable.getSelectionIndex();
-                    if (idx < 0) {
-                        idx = disambiguationsTable.getItemCount() - 1;
+                    // Validate exactly the row that was added or updated: a new
+                    // row goes to the top, so the old "last row" guess is wrong.
+                    if (idx >= 0) {
+                        validateMatchingRowOnline(
+                            disambiguationsTable,
+                            idx,
+                            MatchingRowType.DISAMBIGUATION
+                        );
                     }
-                    validateMatchingRowOnline(
-                        disambiguationsTable,
-                        idx,
-                        MatchingRowType.DISAMBIGUATION
-                    );
                 }
             }
         );
@@ -2185,71 +2183,70 @@ class PreferencesDialog extends Dialog {
         item.setControl(overridesGroup);
     }
 
-    private void upsertOverride(String from, String to) {
-        // Update selected row if present; otherwise upsert by key (case-insensitive).
-        int selected = (overridesTable == null)
-            ? -1
-            : overridesTable.getSelectionIndex();
-        if (selected >= 0) {
-            TableItem ti = overridesTable.getItem(selected);
-            // Column 0 is the status icon column; values are columns 1 and 2.
-            ti.setText(new String[] { "", from, to });
-            return;
-        }
-
-        int updateIdx = -1;
-        if (overridesTable != null) {
-            for (int i = 0; i < overridesTable.getItemCount(); i++) {
-                TableItem ti = overridesTable.getItem(i);
-                if (ti.getText(0).trim().equalsIgnoreCase(from)) {
-                    updateIdx = i;
-                    break;
-                }
-            }
-            if (updateIdx >= 0) {
-                overridesTable
-                    .getItem(updateIdx)
-                    .setText(new String[] { from, to });
-                return;
-            }
-
-            TableItem ti = new TableItem(overridesTable, SWT.NONE);
-            // Column 0 is the status icon column; values are columns 1 and 2.
-            ti.setText(new String[] { "", from, to });
-        }
+    private int upsertOverride(String from, String to) {
+        return upsertMatchingRow(overridesTable, from, to);
     }
 
-    private void upsertDisambiguation(String queryString, String seriesId) {
-        int selected = (disambiguationsTable == null)
-            ? -1
-            : disambiguationsTable.getSelectionIndex();
+    private int upsertDisambiguation(String queryString, String seriesId) {
+        return upsertMatchingRow(disambiguationsTable, queryString, seriesId);
+    }
+
+    /**
+     * Add or update a row in one of the Matching tables.
+     *
+     * A row the user has explicitly selected is the edit target, whatever its
+     * key. Otherwise a row with the same key is updated in place, and a
+     * genuinely new entry is inserted at the top, so the user can see what they
+     * just added without scrolling a long list.
+     *
+     * @param table the Matching table to modify
+     * @param key   the row's key (extracted show name, or provider query string)
+     * @param value the replacement text, or series id
+     * @return index of the row added or updated, or -1 if there is no table
+     */
+    private int upsertMatchingRow(
+        final Table table,
+        final String key,
+        final String value
+    ) {
+        if (table == null || table.isDisposed()) {
+            return -1;
+        }
+        // Column 0 is the status icon column; the values live in columns 1 and 2.
+        final String[] cells = { "", key, value };
+
+        final int selected = table.getSelectionIndex();
         if (selected >= 0) {
-            TableItem ti = disambiguationsTable.getItem(selected);
-            // Column 0 is the status icon column; values are columns 1 and 2.
-            ti.setText(new String[] { "", queryString, seriesId });
-            return;
+            table.getItem(selected).setText(cells);
+            return selected;
         }
 
-        int updateIdx = -1;
-        if (disambiguationsTable != null) {
-            for (int i = 0; i < disambiguationsTable.getItemCount(); i++) {
-                TableItem ti = disambiguationsTable.getItem(i);
-                if (ti.getText(0).trim().equalsIgnoreCase(queryString)) {
-                    updateIdx = i;
-                    break;
-                }
-            }
-            if (updateIdx >= 0) {
-                disambiguationsTable
-                    .getItem(updateIdx)
-                    .setText(new String[] { queryString, seriesId });
-                return;
-            }
-
-            TableItem ti = new TableItem(disambiguationsTable, SWT.NONE);
-            // Column 0 is the status icon column; values are columns 1 and 2.
-            ti.setText(new String[] { "", queryString, seriesId });
+        final int existing = MatchingTableKeys.indexOfKey(rowCells(table), key);
+        if (existing >= 0) {
+            table.getItem(existing).setText(cells);
+            return existing;
         }
+
+        // New entries go to the top to be visible; a column sort would
+        // contradict that order, so drop the sort along with it.
+        table.setSortColumn(null);
+        table.setSortDirection(SWT.NONE);
+        new TableItem(table, SWT.NONE, 0).setText(cells);
+        return 0;
+    }
+
+    /** Snapshot a Matching table's cell values, in table order. */
+    private static List<String[]> rowCells(final Table table) {
+        final int columns = table.getColumnCount();
+        final List<String[]> rows = new ArrayList<>(table.getItemCount());
+        for (final TableItem ti : table.getItems()) {
+            final String[] cells = new String[columns];
+            for (int c = 0; c < columns; c++) {
+                cells[c] = ti.getText(c);
+            }
+            rows.add(cells);
+        }
+        return rows;
     }
 
     private void createDropTarget(final Text targetText) {
