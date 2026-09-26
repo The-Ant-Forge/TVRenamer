@@ -129,12 +129,20 @@ Useful `gh` commands: `gh run list`, `gh run watch --exit-status`, `gh run view 
 2. Download CI artifacts for the exact commit SHA.
 3. Tag and push: `git tag v1.0.<N> && git push origin v1.0.<N>`
 4. Create GitHub Release, upload EXE + JARs.
+5. Copy the released `TVRenamer.exe` and `tvrenamer.jar` to `C:\utils` (see below).
 
 ### Release notes
 Write to `docs/release-notes-v1.0.<N>.md` (no top-level heading — GitHub adds the title). Structure: New features/improvements, then Bug fixes. Publish with `gh release edit v1.0.<N> --notes-file docs/release-notes-v1.0.<N>.md`.
 
 ### Artifact hygiene
 Do not blindly upload `build/libs/*.jar` from local. Prefer CI artifacts, or ensure a clean build, or upload explicit filenames to avoid stale versioned jars.
+
+### Copy to C:\utils after releasing
+Copy the released `TVRenamer.exe` and `tvrenamer.jar` into `C:\utils`, overwriting the
+copies already there. A sync tool watches that directory and distributes the binaries to
+the maintainer's other machines, so a release is not finished until this copy is done.
+Use the same CI artifacts that were attached to the release rather than a separate local
+build, so every machine runs exactly what was published.
 
 ### Documentation check before release
 Update help files (`src/main/resources/help/*.html`), README, release notes, TODO/Completed as needed.
