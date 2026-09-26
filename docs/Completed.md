@@ -1197,6 +1197,29 @@ Completes the code improvement opportunities document (all 24 items done).
 
 ---
 
+### 69) Matching tables open in alphabetical order
+- **Why:** The Overrides and Disambiguations tables were filled straight from the
+  preferences map, so they displayed in file (insertion) order. Sorting existed only as an
+  on-demand header click, added in #65. For lists long enough to need scrolling, the
+  useful default is alphabetical by the key being looked up.
+- **Where:** `org.tvrenamer.view.PreferencesDialog` (`populateMatchingTable` replaces the
+  two identical populate loops).
+- **What we did:**
+  - Both tables are now filled in key order and open alphabetically, with the key column
+    marked as the sort column so the header reflects the order actually on screen.
+  - Ordering reuses `MatchingTableSorter.byColumn`, the same comparator a header click
+    uses, so opening the dialog and clicking the heading cannot disagree. It is already
+    unit-tested, including case-insensitivity and a deterministic tie-break.
+  - The two populate loops were identical and are now one helper.
+- **Notes:**
+  - A newly added entry still goes to the top and clears the sort indicator (#67), so it
+    stays visible for the rest of the session and takes its alphabetical place the next
+    time Preferences is opened.
+  - Saving still writes the table's current order to the preferences file. That order is
+    now cosmetic, since the display sorts on open.
+
+---
+
 ## Related records
 
 - Per-release notes are stored as versioned Markdown files:

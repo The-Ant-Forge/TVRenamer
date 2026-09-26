@@ -1181,6 +1181,49 @@ class PreferencesDialog extends Dialog {
         table.deselectAll();
     }
 
+    /**
+     * Fill a Matching table from saved preferences, ordered by key so the list
+     * reads alphabetically when the dialog opens, and mark the key column as the
+     * sorted one so the header shows the order that is actually on screen.
+     *
+     * Newly added entries still go to the top (see upsertMatchingRow), which
+     * clears the sort indicator; they fall into alphabetical position the next
+     * time the dialog is opened.
+     *
+     * @param table     the Matching table to fill
+     * @param keyColumn the column holding the key, marked as the sort column
+     * @param entries   saved key to value pairs
+     */
+    private void populateMatchingTable(
+        final Table table,
+        final TableColumn keyColumn,
+        final Map<String, String> entries
+    ) {
+        if (table == null || entries == null) {
+            return;
+        }
+        final List<String[]> rows = new ArrayList<>(entries.size());
+        for (final Map.Entry<String, String> e : entries.entrySet()) {
+            // Column 0 is the status icon column; values are columns 1 and 2.
+            rows.add(new String[] { "", e.getKey(), e.getValue() });
+        }
+        // Exactly the ordering a header click produces, so opening the dialog and
+        // clicking the heading agree with each other.
+        rows.sort(
+            MatchingTableSorter.byColumn(MatchingTableKeys.KEY_COLUMN, true)
+        );
+
+        for (final String[] cells : rows) {
+            final TableItem ti = new TableItem(table, SWT.NONE);
+            ti.setText(cells);
+            ti.setImage(0, MATCHING_ICON_OK);
+            ti.setData(MATCHING_DIRTY_KEY, Boolean.FALSE);
+        }
+
+        table.setSortColumn(keyColumn);
+        table.setSortDirection(SWT.UP);
+    }
+
     private void setMatchingHoverTip(final Label label, final String text) {
         if (label == null || label.isDisposed()) {
             return;
@@ -1825,15 +1868,12 @@ class PreferencesDialog extends Dialog {
         // Click either value header to sort; ignored while a row is validating.
         makeMatchingTableSortable(overridesTable, oColFrom, oColTo);
 
-        // Populate table from prefs (not dirty; treat as OK by default).
-        for (Map.Entry<String, String> e : prefs
-            .getShowNameOverrides()
-            .entrySet()) {
-            TableItem ti = new TableItem(overridesTable, SWT.NONE);
-            ti.setText(new String[] { "", e.getKey(), e.getValue() });
-            ti.setImage(0, MATCHING_ICON_OK);
-            ti.setData(MATCHING_DIRTY_KEY, Boolean.FALSE);
-        }
+        // Populate from prefs, ordered by key so the list opens alphabetically.
+        populateMatchingTable(
+            overridesTable,
+            oColFrom,
+            prefs.getShowNameOverrides()
+        );
         // Column sizing:
         // - Col 0 (status icon): fixed-ish width
         // - Cols 1 & 2: split the remaining width evenly so the table fills its bounds neatly
@@ -2089,15 +2129,12 @@ class PreferencesDialog extends Dialog {
         // Click either value header to sort; ignored while a row is validating.
         makeMatchingTableSortable(disambiguationsTable, dColQuery, dColId);
 
-        // Populate table from prefs (not dirty; treat as OK by default).
-        for (Map.Entry<String, String> e : prefs
-            .getShowDisambiguationOverrides()
-            .entrySet()) {
-            TableItem ti = new TableItem(disambiguationsTable, SWT.NONE);
-            ti.setText(new String[] { "", e.getKey(), e.getValue() });
-            ti.setImage(0, MATCHING_ICON_OK);
-            ti.setData(MATCHING_DIRTY_KEY, Boolean.FALSE);
-        }
+        // Populate from prefs, ordered by key so the list opens alphabetically.
+        populateMatchingTable(
+            disambiguationsTable,
+            dColQuery,
+            prefs.getShowDisambiguationOverrides()
+        );
         // Column sizing:
         // - Col 0 (status icon): fixed-ish width
         // - Cols 1 & 2: split the remaining width evenly so the table fills its bounds neatly
