@@ -77,33 +77,6 @@ the reason somewhere visible rather than in a suppressed tooltip; re-check the
 destination when it becomes reachable again.
 **Effort:** Small (logging) to Medium (button behaviour)
 
-### Verify SWT-OS/SWT-Arch manifest workaround can be removed
-**Context:** `build.gradle` injects `SWT-OS`/`SWT-Arch` manifest attributes into
-both fat jars as a workaround for SWT's `isLoadable()` check (background in
-`docs/Completed.md` #37). Upstream issue
-[#2928](https://github.com/eclipse-platform/eclipse.platform.swt/issues/2928) was
-closed 2026-06-01, and SWT 3.134.0 (released 2026-06-05) was expected to contain
-the fix.
-
-**Tested 2026-09-05 — the workaround is STILL REQUIRED.** Removing both
-`manifest { attributes(swtManifestAttributes) }` blocks and rebuilding
-(`clean build shadowJar createExe`) produces a jar whose manifest correctly lacks
-the attributes, but the application then dies at startup, immediately after
-"Creating UIStarter...", with:
-
-    Libraries for platform win32 cannot be loaded because of incompatible environment
-
-Verified against SWT 3.134.0, Shadow 9.6.1, Gradle 9.7.1. The workaround was
-restored and the app confirmed working again. So either the upstream fix does not
-cover the Shadow-repackaged case, or it still relies on these attributes being
-present.
-
-**Action:** Do NOT retry on the current SWT version — the answer is known. Re-test
-only after the next SWT upgrade, using the same procedure: delete the two manifest
-blocks and the `swtManifestAttributes` definition, rebuild, and actually launch the
-jar/EXE (a green build proves nothing here; the failure is at runtime).
-**Effort:** Small
-
 ### Episode DB path canonicalization — add tests
 **Context:** The canonicalization itself has been implemented since this entry
 was written: `EpisodeDb.canonicalizeKey(...)` defines the canonical form

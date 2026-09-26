@@ -1173,6 +1173,30 @@ Completes the code improvement opportunities document (all 24 items done).
 
 ---
 
+### 68) SWT manifest workaround retired on SWT 3.135.0
+- **Why:** `build.gradle` injected `SWT-OS`/`SWT-Arch` manifest attributes into both fat
+  jars so SWT's `isLoadable()` check would pass after the Shadow plugin rewrote the
+  manifest (background in #37). The upstream issue was closed before 3.134.0, but a test
+  on 2026-09-05 found the attributes were still required: without them the application
+  died at startup with "Libraries for platform win32 cannot be loaded because of
+  incompatible environment". SWT 3.135.0 finally makes them unnecessary.
+- **Where:** `build.gradle` (the `swtManifestAttributes` definition and the two
+  `manifest { ... }` blocks in `shadowJar` and `shadowJarVersioned`).
+- **What we did:**
+  - Removed the definition and both manifest blocks, and confirmed the shaded jar no
+    longer carries either attribute.
+  - Verified at runtime twice, because a green build proves nothing for this failure: the
+    fat jar ran until a timed kill, and the packaged Launch4j executable spawned a JVM
+    that was still alive ten seconds later with no fatal-error log written.
+- **Notes:**
+  - The failure mode is at startup rather than at build time, so any future SWT change
+    should be re-checked by launching the artifact, not by building it. The first EXE
+    check looked like a pass because the Launch4j wrapper exits as soon as it has spawned
+    the JVM, which makes its exit code meaningless on its own.
+  - Closes the TODO entry that had carried the negative result from SWT 3.134.0.
+
+---
+
 ## Related records
 
 - Per-release notes are stored as versioned Markdown files:

@@ -189,7 +189,6 @@ def generatedCommitFile = layout.buildDirectory.file("generated/version/tvrename
 
 // Shared SWT manifest attributes required for fat-JAR compatibility (SWT 3.130+).
 // Upstream issue: https://github.com/eclipse-platform/eclipse.platform.swt/issues/2928
-def swtManifestAttributes = ['SWT-OS': 'win32', 'SWT-Arch': 'x86_64']
 
 // Shared closure: adds generated build metadata files into a CopySpec-aware task.
 def addBuildMetadata = { task ->
@@ -228,7 +227,6 @@ tasks.named('processTestResources') {
 shadowJar {
     archiveFileName.set("tvrenamer.jar")
     mergeServiceFiles()
-    manifest { attributes(swtManifestAttributes) }
     addBuildMetadata(it)
 }
 
@@ -240,7 +238,6 @@ tasks.register('shadowJarVersioned', com.github.jengelman.gradle.plugins.shadow.
     from(sourceSets.main.output)
     configurations = [project.configurations.runtimeClasspath]
     mergeServiceFiles()
-    manifest { attributes(swtManifestAttributes) }
     addBuildMetadata(it)
 
     archiveFileName.set("tvrenamer-${computedBuildNumber}.jar")
