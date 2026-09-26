@@ -2,7 +2,7 @@
 # Tooling / plugins
 shadow = "9.6.1"
 launch4j = "4.0.0"
-spotbugs = "6.5.11"
+spotbugs = "6.5.12"
 
 # Runtime dependencies
 swt = "3.135.0"
