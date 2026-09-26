@@ -5,7 +5,7 @@ launch4j = "4.0.0"
 spotbugs = "6.5.11"
 
 # Runtime dependencies
-swt = "3.134.0"
+swt = "3.135.0"
 gson = "2.14.0"
 
 # Test dependencies
