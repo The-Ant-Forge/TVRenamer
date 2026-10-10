@@ -1249,6 +1249,28 @@ Completes the code improvement opportunities document (all 24 items done).
 
 ---
 
+### 71) Adding a pin re-queries rows that were already unfound
+- **Why:** After #70, a pin added for a row already in the table still showed "not found"
+  until the app was restarted. Saving the Matching tab re-matched unfound rows, but the
+  row's query string was unchanged by the pin, so `ShowStore.mapStringToShow` replayed the
+  cached failed lookup without asking the provider. The override path assumed a changed
+  entry always means a new query string, which holds for Overrides but not for pins.
+- **Where:** `org.tvrenamer.view.ResultsTable` (`SHOW_NAME_OVERRIDES` handling and the
+  `rematchRows` javadoc).
+- **What we did:**
+  - The re-match after a Matching-tab save now forgets cached failed lookups first, as the
+    provider-switch path already did. Cached successful matches are never dropped.
+  - Reproduced and verified against the live provider with a harness running the table's
+    sequence (lookup, add pin, re-match): FAILED before, found after.
+- **Notes:**
+  - No automated regression test: the fix is in the SWT view layer, and `ShowStore` calls
+    the real provider with no seam to inject a fake. Worth extracting the re-match policy
+    out of `ResultsTable` in a future review round.
+  - Each Matching-tab save now re-queries the provider once per distinct unfound show,
+    where before the replayed failure cost nothing.
+
+---
+
 ## Related records
 
 - Per-release notes are stored as versioned Markdown files:
