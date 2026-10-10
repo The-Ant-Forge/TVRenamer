@@ -33,6 +33,10 @@ public class TvMazeClient {
         return get("/search/shows?q=" + enc);
     }
 
+    public String showJson(int showId) throws TVRenamerIOException {
+        return get("/shows/" + showId);
+    }
+
     public String episodesJson(int showId) throws TVRenamerIOException {
         return get("/shows/" + showId + "/episodes");
     }

@@ -1220,6 +1220,35 @@ Completes the code improvement opportunities document (all 24 items done).
 
 ---
 
+### 70) Pinned series ids work even when the name search misses the series
+- **Why:** TheTVDB v4 search can return nothing for a series' full title while shorter
+  fragments of the same title find it, and `/series/{id}` returns it normally. A pinned
+  Disambiguation id was only ever used to choose among search results, so for such a
+  series Validate reported "No matches" and renaming failed, even with the correct id
+  pinned. Nothing in the app looked a series up by id.
+- **Where:** `EpisodeDataProvider` (new `addShowOptionById` and default
+  `getShowOptions(showName, pinnedId)`), `TheTVDBv4Provider`, `TvMazeProvider`,
+  `TvdbV4Client.seriesJson`, `V4Parser.parseSeries`, `TvMazeClient.showJson`,
+  `TvMazeParser.parseShow`, and the callers in `ShowStore` and `PreferencesDialog`.
+- **What we did:**
+  - After the name search, if a pinned id is not among the results, the provider fetches
+    that series by id (`/series/{id}` on v4, `/shows/{id}` on TVMaze) and adds it to the
+    candidates. The unified evaluator then picks it as before.
+  - Runtime and both Matching-tab validations (Disambiguation and Override rows) go
+    through the same method, so validation and renaming still agree.
+  - Only an all-digit id is spliced into the request path, since pins come from a
+    user-editable preferences file. An id the provider does not know leaves the search
+    results unchanged.
+  - Regression tests cover the missed-search case on both providers, no extra request
+    when the search already has the pin, an unknown id, and a non-numeric id.
+- **Notes:**
+  - This only helps series that are pinned. An unpinned series the search misses still
+    needs an Override to a search text that finds it.
+  - A mistyped pin can now select a series the search would never have offered.
+    Validate shows "Pinned match is valid" either way, so check the id.
+
+---
+
 ## Related records
 
 - Per-release notes are stored as versioned Markdown files:

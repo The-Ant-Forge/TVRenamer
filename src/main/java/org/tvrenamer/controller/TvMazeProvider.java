@@ -34,6 +34,18 @@ public class TvMazeProvider implements EpisodeDataProvider {
     }
 
     @Override
+    public boolean addShowOptionById(ShowName showName, int seriesId)
+        throws TVRenamerIOException
+    {
+        TvMazeResult r = TvMazeParser.parseShow(client.showJson(seriesId));
+        if (r == null) {
+            return false;
+        }
+        showName.addShowOption(r.id(), r.name(), r.year(), r.aliases());
+        return true;
+    }
+
+    @Override
     public void getSeriesListing(Series series) throws TVRenamerIOException {
         List<EpisodeInfo> episodes =
             TvMazeParser.parseEpisodes(client.episodesJson(series.getId()));

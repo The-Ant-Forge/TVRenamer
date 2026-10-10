@@ -34,6 +34,10 @@ public class TvdbV4Client {
         return authedGet("/search?query=" + enc + "&type=series");
     }
 
+    public String seriesJson(int seriesId) throws TVRenamerIOException {
+        return authedGet("/series/" + seriesId);
+    }
+
     public String episodesJson(int seriesId, String seasonType, String lang, int page)
         throws TVRenamerIOException {
         String base = "/series/" + seriesId + "/episodes/" + seasonType;

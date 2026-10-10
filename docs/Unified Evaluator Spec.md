@@ -100,7 +100,12 @@ If user preferences contain a pinned mapping:
 
 Then:
 - If that provider id exists in the current candidate list, select it.
-- If it does not exist in current results, log a warning and fall back to auto-selection.
+- If it does not exist in current results, the provider fetches that series directly by id
+  and adds it to the candidates (`EpisodeDataProvider.getShowOptions(showName, pinnedId)`),
+  so it is then selected. A provider's name search can miss a series that exists; the pin
+  already says which series is meant. Only an all-digit id is looked up.
+- If the provider does not know that id either, the plain search results stand and
+  selection falls back to auto-selection.
 
 This avoids prompting when the user has already disambiguated that query.
 
@@ -176,15 +181,17 @@ It returns a decision:
 ### How it is used
 
 - **Runtime (ShowStore):**
-  - Fetch provider candidates.
   - Compute `pinnedId` using the query string (`prefs.resolveDisambiguatedSeriesId(queryString)`).
+  - Fetch provider candidates, passing `pinnedId` so a pinned series the search missed is
+    fetched by id.
   - Call the evaluator.
   - If `AMBIGUOUS`, then queue a pending disambiguation entry and require Select Shows.
   - If `RESOLVED`, proceed without prompting.
 
 - **Preferences Matching tab validation:**
-  - Fetch provider candidates (best-effort; provider may be unavailable).
   - Compute `pinnedId` using the same query-string key that runtime would use.
+  - Fetch provider candidates with that `pinnedId`, as runtime does (best-effort; provider
+    may be unavailable).
   - Call the evaluator and treat:
     - `RESOLVED` as “valid / would not prompt”
     - `AMBIGUOUS` as “invalid / would prompt”

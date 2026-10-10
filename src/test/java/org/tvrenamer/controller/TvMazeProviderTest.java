@@ -46,4 +46,21 @@ public class TvMazeProviderTest {
         p.getSeriesListing(s);
         assertFalse(s.noEpisodes(), "episodes should be populated");
     }
+
+    @Test
+    public void pinnedIdMissingFromSearchIsFetchedById() throws Exception {
+        // Same contract as the v4 provider: a pinned id the search missed is
+        // fetched directly from /shows/{id}.
+        TvMazeClient c = clientReturning(u ->
+            u.contains("/shows/990401")
+                ? "{\"id\":990401,\"name\":\"The Quiet Ones\",\"premiered\":\"2023-05-01\"}"
+                : "[]");
+        TvMazeProvider p = new TvMazeProvider(c);
+        ShowName sn = ShowName.mapShowName("the quiet ones tvmaze pinned");
+        p.getShowOptions(sn, "990401");
+        List<ShowOption> opts = sn.getShowOptions();
+        assertEquals(1, opts.size());
+        assertEquals("990401", opts.get(0).getIdString());
+        assertEquals("The Quiet Ones", opts.get(0).getName());
+    }
 }

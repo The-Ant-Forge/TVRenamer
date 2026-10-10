@@ -489,13 +489,13 @@ public class ShowStore {
         Callable<Boolean> showFetcher = () -> {
             ShowOption showOption;
             try {
-                TvdbProviders.current().getShowOptions(showName);
-
-                // If the user previously disambiguated this query string, honor it.
+                // If the user previously disambiguated this query string, honor it,
+                // even when the provider's name search doesn't return that series.
                 String queryString = showName.getQueryString();
                 String preferredId = prefs.resolveDisambiguatedSeriesId(
                     queryString
                 );
+                TvdbProviders.current().getShowOptions(showName, preferredId);
 
                 // Unified decision: use shared evaluator to decide whether we can auto-resolve
                 // or must prompt. This keeps runtime behavior aligned with Preferences validation.

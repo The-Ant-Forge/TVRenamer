@@ -2771,7 +2771,7 @@ class PreferencesDialog extends Dialog {
 
             ShowName sn = ShowName.mapShowName(queryString);
             try {
-                TvdbProviders.current().getShowOptions(sn);
+                TvdbProviders.current().getShowOptions(sn, seriesId);
             } catch (Exception e) {
                 return ValidationResult.invalid(
                     "Cannot validate (provider unavailable)"
@@ -2799,8 +2799,9 @@ class PreferencesDialog extends Dialog {
         String queryString = StringUtils.makeQueryString(replacementText);
 
         ShowName sn = ShowName.mapShowName(replacementText);
+        String pinnedId = prefs.resolveDisambiguatedSeriesId(queryString);
         try {
-            TvdbProviders.current().getShowOptions(sn);
+            TvdbProviders.current().getShowOptions(sn, pinnedId);
         } catch (Exception e) {
             return ValidationResult.invalid(
                 "Cannot validate (provider unavailable)"
@@ -2812,7 +2813,6 @@ class PreferencesDialog extends Dialog {
             return ValidationResult.invalid("No matches");
         }
 
-        String pinnedId = prefs.resolveDisambiguatedSeriesId(queryString);
         ShowSelectionEvaluator.Decision decision =
             ShowSelectionEvaluator.evaluate(replacementText, options, pinnedId);
 

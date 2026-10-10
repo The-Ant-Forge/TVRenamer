@@ -33,24 +33,44 @@ public final class TvMazeParser {
             if (!wrapper.has("show") || !wrapper.get("show").isJsonObject()) {
                 continue;
             }
-            JsonObject show = wrapper.getAsJsonObject("show");
-            String id = intAsString(show, "id");
-            String name = str(show, "name");
-            if (id == null || name == null) {
-                continue;
+            TvMazeResult r = showResult(wrapper.getAsJsonObject("show"));
+            if (r != null) {
+                out.add(r);
             }
-            Integer year = null;
-            String premiered = str(show, "premiered");
-            if (premiered != null && premiered.length() >= 4) {
-                try {
-                    year = Integer.parseInt(premiered.substring(0, 4));
-                } catch (NumberFormatException ignored) {
-                    year = null;
-                }
-            }
-            out.add(new TvMazeResult(id, name, year, Collections.emptyList()));
         }
         return out;
+    }
+
+    /**
+     * Parse a /shows/{id} response (a single show object, not wrapped).
+     *
+     * @return the show, or null if the body has no usable id and name
+     */
+    public static TvMazeResult parseShow(String json) {
+        try {
+            JsonElement root = GSON.fromJson(json, JsonElement.class);
+            return (root != null && root.isJsonObject()) ? showResult(root.getAsJsonObject()) : null;
+        } catch (JsonSyntaxException e) {
+            return null;
+        }
+    }
+
+    private static TvMazeResult showResult(JsonObject show) {
+        String id = intAsString(show, "id");
+        String name = str(show, "name");
+        if (id == null || name == null) {
+            return null;
+        }
+        Integer year = null;
+        String premiered = str(show, "premiered");
+        if (premiered != null && premiered.length() >= 4) {
+            try {
+                year = Integer.parseInt(premiered.substring(0, 4));
+            } catch (NumberFormatException ignored) {
+                year = null;
+            }
+        }
+        return new TvMazeResult(id, name, year, Collections.emptyList());
     }
 
     public static List<EpisodeInfo> parseEpisodes(String json) {

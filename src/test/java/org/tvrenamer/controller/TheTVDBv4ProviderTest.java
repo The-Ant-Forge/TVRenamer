@@ -175,4 +175,77 @@ public class TheTVDBv4ProviderTest {
             "override must reset when the translation call fails");
         assertFalse(s.noEpisodes(), "episodes should still populate despite translation failure");
     }
+
+    /** Search body with no results: the v4 search can miss a series that exists. */
+    private static final String EMPTY_SEARCH_BODY = "{\"data\":[],\"links\":{}}";
+
+    /** v4 /series/{id} body: numeric id, string year, aliases as objects. */
+    private static final String SERIES_990301_BODY =
+        "{\"data\":{\"id\":990301,\"name\":\"The Quiet Ones\",\"year\":\"2023\","
+        + "\"aliases\":[{\"language\":\"eng\",\"name\":\"Quiet Ones\"}]}}";
+
+    @Test
+    public void pinnedIdMissingFromSearchIsFetchedById() throws Exception {
+        // Regression: the v4 search sometimes returns nothing for a full title
+        // even though the series exists. A pinned id must still be offered as a
+        // candidate, fetched directly from /series/{id}.
+        TheTVDBv4Provider provider = new TheTVDBv4Provider(clientForListing(u ->
+            u.contains("/series/990301")
+                ? new TvdbHttpResponse(200, SERIES_990301_BODY)
+                : new TvdbHttpResponse(200, EMPTY_SEARCH_BODY)));
+        ShowName sn = ShowName.mapShowName("the quiet ones pinned");
+        provider.getShowOptions(sn, "990301");
+        List<ShowOption> opts = sn.getShowOptions();
+        assertEquals(1, opts.size());
+        assertEquals("990301", opts.get(0).getIdString());
+        assertEquals("The Quiet Ones", opts.get(0).getName());
+    }
+
+    @Test
+    public void pinnedIdAlreadyInSearchResultsIsNotFetchedAgain() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger seriesCalls =
+            new java.util.concurrent.atomic.AtomicInteger();
+        String search = "{\"data\":[{\"tvdb_id\":\"990302\",\"name\":\"Solar Drift\"}]}";
+        TheTVDBv4Provider provider = new TheTVDBv4Provider(clientForListing(u -> {
+            if (u.contains("/series/")) {
+                seriesCalls.incrementAndGet();
+            }
+            return new TvdbHttpResponse(200, search);
+        }));
+        ShowName sn = ShowName.mapShowName("solar drift pinned");
+        provider.getShowOptions(sn, "990302");
+        assertEquals(1, sn.getShowOptions().size());
+        assertEquals(0, seriesCalls.get(), "no by-id lookup when search already has the pin");
+    }
+
+    @Test
+    public void unknownPinnedIdLeavesSearchResultsUnchanged() throws Exception {
+        // A pinned id the provider doesn't know (404) is not an error for the
+        // search as a whole: the caller sees the plain search results.
+        TheTVDBv4Provider provider = new TheTVDBv4Provider(clientForListing(u ->
+            u.contains("/series/")
+                ? new TvdbHttpResponse(404, "")
+                : new TvdbHttpResponse(200, EMPTY_SEARCH_BODY)));
+        ShowName sn = ShowName.mapShowName("westmark academy pinned");
+        provider.getShowOptions(sn, "990303");
+        assertTrue(sn.getShowOptions().isEmpty());
+    }
+
+    @Test
+    public void nonNumericPinnedIdIsNotSentToProvider() throws Exception {
+        // Pinned ids come from a user-editable prefs file; only digits may be
+        // spliced into the request path.
+        java.util.concurrent.atomic.AtomicInteger seriesCalls =
+            new java.util.concurrent.atomic.AtomicInteger();
+        TheTVDBv4Provider provider = new TheTVDBv4Provider(clientForListing(u -> {
+            if (u.contains("/series/")) {
+                seriesCalls.incrementAndGet();
+            }
+            return new TvdbHttpResponse(200, EMPTY_SEARCH_BODY);
+        }));
+        ShowName sn = ShowName.mapShowName("ciudad del sol pinned");
+        provider.getShowOptions(sn, "1/episodes/default");
+        assertTrue(sn.getShowOptions().isEmpty());
+        assertEquals(0, seriesCalls.get());
+    }
 }

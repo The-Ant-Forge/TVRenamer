@@ -44,6 +44,18 @@ public class TheTVDBv4Provider implements EpisodeDataProvider {
     }
 
     @Override
+    public boolean addShowOptionById(ShowName showName, int seriesId)
+        throws TVRenamerIOException
+    {
+        V4SeriesResult r = V4Parser.parseSeries(client.seriesJson(seriesId));
+        if (r == null) {
+            return false;
+        }
+        showName.addShowOption(r.tvdbId(), r.name(), r.year(), r.aliases());
+        return true;
+    }
+
+    @Override
     public void getSeriesListing(Series series) throws TVRenamerIOException {
         final int id = series.getId();
         final String lang = UserPreferences.getInstance().getTitleLanguage().code();
