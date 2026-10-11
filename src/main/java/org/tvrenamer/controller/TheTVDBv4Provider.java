@@ -2,7 +2,9 @@ package org.tvrenamer.controller;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 import org.tvrenamer.controller.tvdb.JdkHttpTransport;
 import org.tvrenamer.controller.tvdb.TvdbV4Client;
@@ -78,7 +80,8 @@ public class TheTVDBv4Provider implements EpisodeDataProvider {
         // Episodes: prefer DVD ordering when requested, else aired; language applied
         // to whichever season-type is used.
         boolean preferDvd = UserPreferences.getInstance().isPreferDvdOrderIfPresent();
-        List<EpisodeInfo> episodes;
+        List<EpisodeInfo> episodes = null;
+        String seasonType = "default";
         if (preferDvd) {
             // A series without DVD ordering may be signalled either as 200 + an
             // empty list OR as a non-200 error status (which fetchAll surfaces as
@@ -90,15 +93,56 @@ public class TheTVDBv4Provider implements EpisodeDataProvider {
             } catch (TVRenamerIOException e) {
                 dvd = Collections.emptyList();
             }
-            episodes = dvd.isEmpty() ? fetchAll(id, "default", lang) : dvd;
-        } else {
+            if (!dvd.isEmpty()) {
+                episodes = dvd;
+                seasonType = "dvd";
+            }
+        }
+        if (episodes == null) {
             episodes = fetchAll(id, "default", lang);
         }
+        episodes = fillMissingTitles(id, seasonType, episodes);
 
         // v4 ordering is baked into the chosen season-type; no per-episode DVD fallback.
         series.setPreferDvd(false);
         series.addEpisodeInfos(episodes.toArray(new EpisodeInfo[0]));
         series.listingsSucceeded();
+    }
+
+    /**
+     * Fill in titles the requested language doesn't have from the series'
+     * original-language listing, matched by episode id.
+     *
+     * <p>v4 answers a language-qualified listing with 200 and {@code "name": null}
+     * for each episode lacking a translation, so a series with no translated
+     * titles at all comes back with every title missing. The original title is
+     * what TheTVDB itself shows in that case. If the fallback fetch fails, the
+     * listing is kept as is: a missing title must not cost the whole listing.
+     */
+    private List<EpisodeInfo> fillMissingTitles(int id, String seasonType,
+                                                List<EpisodeInfo> episodes)
+    {
+        if (episodes.stream().noneMatch(e -> e.episodeName == null)) {
+            return episodes;
+        }
+        Map<String, String> originalTitles = new HashMap<>();
+        try {
+            for (EpisodeInfo e : fetchPages(id, seasonType, null)) {
+                if (e.episodeId != null && e.episodeName != null) {
+                    originalTitles.put(e.episodeId, e.episodeName);
+                }
+            }
+        } catch (TVRenamerIOException e) {
+            logger.fine("v4 original-language titles unavailable for " + id
+                + ": " + e.getMessage());
+            return episodes;
+        }
+        List<EpisodeInfo> filled = new ArrayList<>(episodes.size());
+        for (EpisodeInfo e : episodes) {
+            String original = (e.episodeName == null) ? originalTitles.get(e.episodeId) : null;
+            filled.add(original == null ? e : e.withEpisodeName(original));
+        }
+        return filled;
     }
 
     private List<EpisodeInfo> fetchAll(int id, String seasonType, String lang)

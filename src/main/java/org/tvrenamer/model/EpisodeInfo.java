@@ -73,6 +73,24 @@ public class EpisodeInfo {
     }
 
     /**
+     * Return a copy of this EpisodeInfo with a different episode name.
+     *
+     * @param name the replacement episode name
+     * @return a new EpisodeInfo; this one is unchanged
+     */
+    public EpisodeInfo withEpisodeName(String name) {
+        return new Builder()
+            .episodeId(episodeId)
+            .seasonNumber(seasonNumber)
+            .episodeNumber(episodeNumber)
+            .episodeName(name)
+            .firstAired(firstAired)
+            .dvdSeason(dvdSeason)
+            .dvdEpisodeNumber(dvdEpisodeNumber)
+            .build();
+    }
+
+    /**
      * Standard object method to represent this EpisodeInfo as a String.
      *
      * @return string which describes the placement information of this EpisodeInfo

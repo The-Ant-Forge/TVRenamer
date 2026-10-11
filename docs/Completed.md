@@ -1271,6 +1271,34 @@ Completes the code improvement opportunities document (all 24 items done).
 
 ---
 
+### 72) Episodes without a translated title no longer fail the whole listing
+- **Why:** For a series with no episode titles in the chosen title language, TheTVDB v4
+  answers the language-qualified listing with 200 and `"name": null` for every episode.
+  The null reached `EpisodeReplacementFormatter.format`, which threw a
+  NullPointerException. The exception was thrown inside a listings listener, so it
+  propagated back into the download thread and every file for the series showed
+  "Downloading show listings failed", although the download itself had succeeded.
+- **Where:** `org.tvrenamer.controller.TheTVDBv4Provider` (`fillMissingTitles`),
+  `org.tvrenamer.model.EpisodeInfo` (`withEpisodeName`),
+  `org.tvrenamer.model.EpisodeReplacementFormatter`.
+- **What we did:**
+  - When the listing in the chosen language has episodes without a title, the provider
+    fetches the original-language listing once and fills each missing title from it,
+    matched by episode id. Titles that do exist in the chosen language are kept. This is
+    what TheTVDB itself shows when a translation is missing.
+  - If that extra fetch fails, the listing is kept as is.
+  - The formatter treats a null title as empty, so a missing title can no longer crash a
+    rename whichever provider supplied it.
+  - Regression tests: per-episode fallback, fallback-fetch failure, and the formatter
+    with a null title. Verified against the live API with a real affected series.
+- **Notes:**
+  - Filenames for such a series get original-language episode titles, not English ones.
+  - Not fixed here: an exception in one listings listener still turns a successful
+    download into a failure for every listener of that series (`Series.listingsSucceeded`
+    runs listeners on the download thread). Worth isolating in a future review round.
+
+---
+
 ## Related records
 
 - Per-release notes are stored as versioned Markdown files:

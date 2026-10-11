@@ -248,4 +248,58 @@ public class TheTVDBv4ProviderTest {
         assertTrue(sn.getShowOptions().isEmpty());
         assertEquals(0, seriesCalls.get());
     }
+
+    /** Episodes in the requested language: episode 1 has no translated title. */
+    private static final String ENG_EPISODES_MISSING_TITLE =
+        "{\"data\":{\"episodes\":["
+        + "{\"id\":\"601\",\"seasonNumber\":\"1\",\"number\":\"1\",\"name\":null},"
+        + "{\"id\":\"602\",\"seasonNumber\":\"1\",\"number\":\"2\",\"name\":\"Second Light\"}"
+        + "]},\"links\":{}}";
+
+    /** The same episodes in the series' original language. */
+    private static final String ORIGINAL_EPISODES =
+        "{\"data\":{\"episodes\":["
+        + "{\"id\":\"601\",\"seasonNumber\":\"1\",\"number\":\"1\",\"name\":\"Primeira Luz\"},"
+        + "{\"id\":\"602\",\"seasonNumber\":\"1\",\"number\":\"2\",\"name\":\"Segunda Luz\"}"
+        + "]},\"links\":{}}";
+
+    @Test
+    public void missingTranslatedTitlesFallBackToOriginalLanguage() throws Exception {
+        // Regression: v4 returns 200 with "name": null for every episode that has
+        // no translation in the requested language. Those nulls reached the
+        // filename formatter and crashed the whole listing. Fill each missing
+        // title from the original-language listing; keep titles that exist.
+        UserPreferences.getInstance().setTitleLanguage(TitleLanguage.ENGLISH);
+        TheTVDBv4Provider provider = new TheTVDBv4Provider(clientForListing(u -> {
+            if (u.contains("/episodes/default/eng")) {
+                return new TvdbHttpResponse(200, ENG_EPISODES_MISSING_TITLE);
+            }
+            if (u.contains("/episodes/default?")) {
+                return new TvdbHttpResponse(200, ORIGINAL_EPISODES);
+            }
+            return new TvdbHttpResponse(404, "");
+        }));
+        Series s = Series.createSeries(990501, "Solar Drift");
+        provider.getSeriesListing(s);
+        assertEquals("Primeira Luz",
+            s.getEpisode(new org.tvrenamer.model.EpisodePlacement(1, 1)).getTitle());
+        assertEquals("Second Light",
+            s.getEpisode(new org.tvrenamer.model.EpisodePlacement(1, 2)).getTitle());
+    }
+
+    @Test
+    public void titleFallbackFailureKeepsTheListing() throws Exception {
+        // The original-language fetch is only a nicety: if it fails, the
+        // listing still succeeds with the titles it has.
+        UserPreferences.getInstance().setTitleLanguage(TitleLanguage.ENGLISH);
+        TheTVDBv4Provider provider = new TheTVDBv4Provider(clientForListing(u ->
+            u.contains("/episodes/default/eng")
+                ? new TvdbHttpResponse(200, ENG_EPISODES_MISSING_TITLE)
+                : new TvdbHttpResponse(500, "")));
+        Series s = Series.createSeries(990502, "Solar Drift");
+        provider.getSeriesListing(s);
+        assertFalse(s.noEpisodes());
+        assertEquals("Second Light",
+            s.getEpisode(new org.tvrenamer.model.EpisodePlacement(1, 2)).getTitle());
+    }
 }

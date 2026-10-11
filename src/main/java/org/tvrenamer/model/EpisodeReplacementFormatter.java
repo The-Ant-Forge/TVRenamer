@@ -98,7 +98,12 @@ public final class EpisodeReplacementFormatter {
             final Integer multiEpisodeEnd) {
 
         final String showName = show.getName();
+        // A provider can return an episode with no title (e.g. no translation in
+        // the chosen language): leave the title tokens empty rather than fail.
         String episodeTitle = episode.getTitle();
+        if (episodeTitle == null) {
+            episodeTitle = "";
+        }
 
         if (episodeTitle.length() > MAX_TITLE_LENGTH) {
             final String fullTitle = episodeTitle;
