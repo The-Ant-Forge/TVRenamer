@@ -13,6 +13,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.tvrenamer.controller.UserPreferencesPersistence;
 import org.tvrenamer.controller.util.FileUtilities;
+import org.tvrenamer.controller.util.StringUtils;
 
 public class UserPreferences {
 
@@ -359,7 +360,10 @@ public class UserPreferences {
 
     /**
      * Resolve a show name by applying user-defined overrides.
-     * Matching is case-insensitive exact match.
+     * Matching compares normalized query strings (case, separators and most
+     * punctuation ignored), so a key may be written either as the raw name
+     * parsed from the filename ("Solar_Drift") or as the query string the UI
+     * shows ("solar drift").
      *
      * @param extractedShowName show name extracted from the filename
      * @return overridden show name if configured, otherwise the original input
@@ -369,9 +373,12 @@ public class UserPreferences {
             return null;
         }
 
+        final String extractedQuery =
+            StringUtils.makeQueryString(extractedShowName);
         for (Map.Entry<String, String> entry : showNameOverrides.entrySet()) {
             String from = entry.getKey();
-            if (from != null && from.equalsIgnoreCase(extractedShowName)) {
+            if (from != null
+                    && StringUtils.makeQueryString(from).equals(extractedQuery)) {
                 String to = entry.getValue();
                 if (to != null && !to.isBlank()) {
                     return to;

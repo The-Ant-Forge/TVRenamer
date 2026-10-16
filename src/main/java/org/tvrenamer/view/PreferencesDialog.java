@@ -1709,7 +1709,7 @@ class PreferencesDialog extends Dialog {
         Label fromLabel = new Label(overridesGroup, SWT.NONE);
         fromLabel.setText("Extracted show");
         fromLabel.setToolTipText(
-            "Exact match (case-insensitive). Example: Stars"
+            "Case, dots, underscores and most punctuation are ignored. Example: stars"
         );
 
         overridesFromText = createText("", overridesGroup, false);

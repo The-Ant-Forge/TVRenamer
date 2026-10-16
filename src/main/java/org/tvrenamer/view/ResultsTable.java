@@ -517,10 +517,16 @@ public final class ResultsTable
         link.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
-                String extractedShow = ep.getExtractedFilenameShow();
+                // Pre-fill the normalized query string: it is the text the row
+                // shows ("No info for ...") and what the provider was asked, so
+                // the user sees one consistent name. Overrides match on this
+                // normalized form (see UserPreferences.resolveShowName).
+                String queryString = StringUtils.makeQueryString(
+                    ep.getExtractedFilenameShow()
+                );
                 PreferencesDialog preferencesDialog =
                     new PreferencesDialog(shell);
-                preferencesDialog.open(2, extractedShow);
+                preferencesDialog.open(2, queryString);
             }
         });
 

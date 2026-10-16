@@ -1297,6 +1297,30 @@ Completes the code improvement opportunities document (all 24 items done).
     download into a failure for every listener of that series (`Series.listingsSucceeded`
     runs listeners on the download thread). Worth isolating in a future review round.
 
+### 73) The Hint link pre-fills the name the row shows, and overrides match it
+- **Why:** An unfound row shows `No info for "..."` with the normalized query string
+  (lower case, underscores and punctuation turned into spaces), but "click to set Hint"
+  pre-filled the raw name parsed from the filename. Overrides were matched against that
+  raw name, ignoring only case, so an override typed from the text the row shows never
+  matched and the user could not tell which name to use.
+- **Where:** `org.tvrenamer.view.ResultsTable` (`setUnfoundShowLink`),
+  `org.tvrenamer.model.UserPreferences` (`resolveShowName`),
+  `org.tvrenamer.view.MatchingTableKeys` (`indexOfKey`), `PreferencesDialog` tooltip,
+  `help/show-matching.html`.
+- **What we did:**
+  - The Hint link pre-fills the query string, the same text the row shows and the
+    provider was searched with.
+  - `resolveShowName` compares normalized query strings, so a key written either as the
+    raw parsed name or as the query string matches. Existing overrides keep working.
+  - Duplicate detection in the Matching tables uses the same comparison, so the two
+    spellings of one name update a single row instead of adding a competing one.
+  - Tooltip and help updated; regression test `ShowNameOverrideMatchingTest`.
+- **Notes:**
+  - Matching is looser than before: names differing only in punctuation now count as the
+    same name.
+  - Saved overrides whose keys already normalize to the same text are not merged; which
+    one wins depends on map order.
+
 ---
 
 ## Related records

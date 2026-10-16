@@ -1,6 +1,7 @@
 package org.tvrenamer.view;
 
 import java.util.List;
+import org.tvrenamer.controller.util.StringUtils;
 
 /**
  * Key lookup for the Preferences "Matching" tables (Overrides and
@@ -21,8 +22,10 @@ final class MatchingTableKeys {
     }
 
     /**
-     * Find the row whose key equals the given one, ignoring case and
-     * surrounding whitespace.
+     * Find the row whose key equals the given one once both are normalized to
+     * a query string (case, separators and most punctuation ignored). This is
+     * the same comparison runtime override matching uses, so "Solar_Drift" and
+     * "solar drift" are one entry, not two that silently compete.
      *
      * @param rows row cell values, in table order
      * @param key  the key to look for
@@ -32,7 +35,7 @@ final class MatchingTableKeys {
         if (rows == null || key == null) {
             return -1;
         }
-        final String wanted = key.trim();
+        final String wanted = StringUtils.makeQueryString(key);
         for (int i = 0; i < rows.size(); i++) {
             final String[] row = rows.get(i);
             // Rows can be shorter than expected, and cells can be null; neither
@@ -41,7 +44,7 @@ final class MatchingTableKeys {
                 continue;
             }
             final String cell = row[KEY_COLUMN];
-            if (cell != null && cell.trim().equalsIgnoreCase(wanted)) {
+            if (cell != null && StringUtils.makeQueryString(cell).equals(wanted)) {
                 return i;
             }
         }
