@@ -77,6 +77,16 @@ the reason somewhere visible rather than in a suppressed tooltip; re-check the
 destination when it becomes reachable again.
 **Effort:** Small (logging) to Medium (button behaviour)
 
+### Folders are silently ignored when "Recursively add shows in subdirectories" is off
+**Context:** Found 2026-10-30 during a help-page review. The preference reads as "also scan
+subfolders", but `EpisodeDb` treats it as "folders may be added at all":
+`addFolderToQueue` returns early with only a log warning, `addArrayOfStringsToQueue`
+(drag and drop) skips dropped folders because they aren't regular files, and `preload()`
+returns early. The user gets no feedback in any of the three cases.
+**Options:** scan only the top level of the folder when the preference is off (matches the
+label), or keep the behaviour and say so in the UI (status message, or disable Add Folder).
+**Effort:** Small
+
 ### Episode DB path canonicalization — add tests
 **Context:** The canonicalization itself has been implemented since this entry
 was written: `EpisodeDb.canonicalizeKey(...)` defines the canonical form

@@ -17,9 +17,19 @@
     <p>The easiest way: simply drag video files from Windows Explorer and drop them onto the TVRenamer window.</p>
     <ul>
         <li>You can drag individual files or entire folders</li>
-        <li>Folders are scanned recursively for video files</li>
-        <li>Non-video files are ignored</li>
+        <li>Folders are scanned recursively, including subfolders</li>
+        <li>Hidden files are skipped, as are files matching an <strong>Ignore Keywords</strong> entry (see <a href="preferences.html">Preferences</a>)</li>
     </ul>
+
+    <h2>Add Files / Add Folder Buttons</h2>
+    <p>The <strong>Add files</strong> and <strong>Add Folder</strong> buttons at the bottom of
+    the window open a standard file or folder picker. They work the same way as drag and drop.</p>
+
+    <div class="note">
+        <strong>Note:</strong> Folders, whether dropped, picked with <strong>Add Folder</strong>
+        or set as the preload folder, are only added while <strong>Recursively add shows in
+        subdirectories</strong> is enabled in Preferences (it is on by default). With it off, only individual files can be added.
+    </div>
 
     <h2>Preload Folder (Automatic)</h2>
     <p>Configure a folder in Preferences that TVRenamer will automatically scan on startup:</p>
@@ -35,13 +45,14 @@
     </div>
 
     <h2>Supported File Types</h2>
-    <p>TVRenamer recognizes these video extensions:</p>
-    <ul>
-        <li><code>.avi</code>, <code>.mkv</code>, <code>.mp4</code>, <code>.m4v</code>, <code>.mov</code></li>
-        <li><code>.wmv</code>, <code>.webm</code>, <code>.flv</code>, <code>.ogm</code></li>
-        <li><code>.ts</code>, <code>.m2ts</code>, <code>.mpg</code>, <code>.mpeg</code></li>
-        <li>And more...</li>
-    </ul>
+    <p>TVRenamer does not filter by extension: any file whose name contains a show name and an
+    episode number can be added and renamed. That is usually a video file
+    (<code>.mkv</code>, <code>.mp4</code>, <code>.avi</code> and so on), but it also covers
+    subtitle files.</p>
+    <p>Adding subtitle files (<code>.srt</code>, <code>.ass</code>, <code>.ssa</code>,
+    <code>.vtt</code>) alongside their video is worthwhile: both are renamed to the episode's
+    name, so they stay paired even if their original names differ, and they can then be merged
+    into the video (see <a href="subtitle-merge.html">Subtitle Merging</a>).</p>
 
     <h2>Filename Parsing</h2>
     <p>TVRenamer extracts show name and episode information from filenames. It recognizes patterns like:</p>
@@ -86,8 +97,8 @@
 
     <h2>Removing Files from the List</h2>
     <ul>
-        <li>Select files and press <kbd>Delete</kbd></li>
-        <li>Or right-click and choose "Remove"</li>
+        <li>Select files and press <kbd>Delete</kbd> (or <kbd>Backspace</kbd>)</li>
+        <li><strong>Clear List</strong> removes every row; <strong>Clear Completed</strong> removes only rows already processed</li>
     </ul>
     <p>This only removes them from TVRenamer's list, not from disk.</p>
 

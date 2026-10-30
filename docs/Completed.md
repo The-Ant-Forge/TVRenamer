@@ -1321,6 +1321,22 @@ Completes the code improvement opportunities document (all 24 items done).
   - Saved overrides whose keys already normalize to the same text are not merged; which
     one wins depends on map order.
 
+### 74) MP4 tagging via ffmpeg no longer strips merged subtitle tracks
+- **Why:** With AtomicParsley absent, MP4 tagging falls back to an ffmpeg remux
+  (`-c copy` to a temp file, then replace). The command had no `-map`, so ffmpeg's default
+  stream selection kept one video and one audio stream and dropped every subtitle track.
+  The merge logged success, then tagging silently removed the track it had just added.
+- **Where:** `org.tvrenamer.controller.metadata.Mp4MetadataTagger` (`buildFfmpegCommand`),
+  `Mp4MetadataTaggerTest`, `help/metadata-tagging.html`, `docs/Tagging Spec.md`.
+- **What we did:**
+  - The ffmpeg command passes `-map 0`, keeping every input stream.
+  - Command construction moved into a package-private static so a test pins `-map 0`.
+- **Notes:**
+  - `-map 0` also copies data streams; a source with a stream ffmpeg cannot write back to
+    MP4 now fails to tag instead of silently losing the stream. The original file is
+    untouched in that case (ffmpeg writes to a temp file).
+  - AtomicParsley edits in place and was never affected.
+
 ---
 
 ## Related records

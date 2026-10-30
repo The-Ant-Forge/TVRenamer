@@ -35,7 +35,7 @@ The screenshot currently references the upstream wiki:
  * **SMB/network renaming**: supported for SMB renaming on network shares like NASs (report edge cases)
  * **Theme support**: Light, Dark, and Auto (OS-detected). Requires restart.
  * **Metadata tagging**: Embed TV metadata (show, season, episode, title, air date) directly into video files:
-   - **MP4/M4V/MOV**: Built-in support using iTunes-style atoms (works with Plex, Kodi, Jellyfin, iTunes, VLC)
+   - **MP4/M4V/MOV**: Requires [AtomicParsley](https://github.com/wez/atomicparsley) (preferred, edits in place) or ffmpeg (fallback, rewrites the file keeping every track); writes iTunes-style atoms (works with Plex, Kodi, Jellyfin, iTunes, VLC)
    - **MKV/WebM**: Requires [MKVToolNix](https://mkvtoolnix.download/) installed (uses mkvpropedit)
    - Tagging runs **on the source disk before the move** — fast local I/O, no network round-trip during tag.
  * **Subtitle merging**: Auto-mux sibling subtitle files (`.srt`, `.ass`, `.ssa`, `.vtt`) into the renamed media as soft tracks:
@@ -69,8 +69,8 @@ If a show you know exists consistently returns "No info", the active provider's 
 > If you get a warning from your virus software, please report it to the vendor as a false positive.
 
 ### Downloads
-This fork currently builds Windows artifacts via GitHub Actions. You can use:
-- **GitHub Releases** (if/when published), or
+This fork builds Windows artifacts via GitHub Actions. You can use:
+- **[GitHub Releases](https://github.com/The-Ant-Forge/TVRenamer/releases)** (recommended: the EXE and JAR for each tagged version), or
 - **GitHub Actions artifacts** from the latest successful run on `master`:
   - `TVRenamer-Windows-Exe` (Windows x64)
   - `TVRenamer-JAR` (fat jar)
@@ -103,10 +103,6 @@ If you receive errors about being unable to connect to the internet, ensure:
 ### x86/ 64 bit architecture version
 Ensure that you are running the same architecture of TVRenamer as Java. `java -version` displays the version on the last line, as above. If you don't have it right, you get an unhelpful error message on startup (when running on the terminal), like below:
     Exception in thread "main" java.lang.UnsatisfiedLinkError: Cannot load 32-bit SWT libraries on 64-bit JVM
-
-### "TVRenamer can't be opened because it's from an unidentified developer" error message on OSX Mountain Lion or above.
-This is because we have not signed the application with Apple (and because we use Java, they won't allow us to). To get around this, just right-click the app in Finder and select Open. You only need to do this once.
-[More information from iMore](http://www.imore.com/how-open-apps-unidentified-developer-os-x-mountain-lion)
 
 ## Running in debug mode (logging)
 If the application crashes, it helps greatly if you can provide logs and a stacktrace.

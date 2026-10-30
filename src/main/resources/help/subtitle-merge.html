@@ -52,6 +52,13 @@
 
     <p>For a media file like <code>Westmark Academy.S01E02.mkv</code>, TVRenamer scans the same directory for sibling subtitle files whose name starts with the media file's base name and ends with a supported subtitle extension.</p>
 
+    <div class="tip">
+        <strong>Tip:</strong> If a subtitle's name doesn't match its video (for example
+        <code>westmark_academy_102_final.srt</code> next to <code>Westmark.Academy.S01E02.mkv</code>),
+        add the subtitle file to TVRenamer along with the video. Both are renamed to the
+        episode's name, so they match by the time the merge runs.
+    </div>
+
     <h3>Bare match</h3>
     <ul>
         <li><code>Westmark Academy.S01E02.srt</code> &rarr; uses your default language preference.</li>
@@ -146,6 +153,8 @@
 
     <h3>Media player doesn't show the new track</h3>
     <ul>
+        <li>Most players don't turn on a soft subtitle track by default &mdash; pick it from the player's subtitle menu</li>
+        <li>Check the track is really there with <code>MP4Box -info</code> or <code>mkvmerge --identify</code> (see above)</li>
         <li>Some players cache track lists per-file &mdash; close and reopen the file</li>
         <li>Refresh your library/metadata in your media manager (Plex, Jellyfin, Kodi)</li>
     </ul>

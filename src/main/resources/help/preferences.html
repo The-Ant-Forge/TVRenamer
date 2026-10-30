@@ -35,8 +35,10 @@
         <li><strong>Checked</strong> - Overwrite existing files</li>
     </ul>
 
-    <h3>Recursively Add Folders</h3>
-    <p>When adding a folder, also scan its subfolders for video files.</p>
+    <h3>Recursively Add Shows in Subdirectories</h3>
+    <p>When adding a folder (by drag and drop, <strong>Add Folder</strong>, or the preload folder),
+    scan it and all its subfolders. On by default. With it off, folders are not added at all;
+    only individually chosen files are.</p>
 
     <h3>Remove Emptied Directories</h3>
     <p>After moving files out of a folder, delete the folder if it is left empty.</p>
@@ -79,10 +81,10 @@
 
     <h2>Episode Ordering</h2>
 
-    <h3>Episode Ordering Preference</h3>
+    <h3>Prefer DVD Episode Order If Present</h3>
     <ul>
-        <li><strong>Aired</strong> - Original broadcast order (recommended for most uses)</li>
-        <li><strong>DVD</strong> - DVD/BluRay release order (some shows reorder episodes)</li>
+        <li><strong>Unchecked</strong> (default) - Aired order: original broadcast order, recommended for most uses</li>
+        <li><strong>Checked</strong> - DVD/BluRay release order where the provider has one (some shows reorder episodes); aired order otherwise</li>
     </ul>
     <p>Only used when <strong>TheTVDB (v4)</strong> is selected; the setting is disabled for
     <strong>TVMaze</strong>, which TVRenamer always reads in aired order. Changing it refreshes

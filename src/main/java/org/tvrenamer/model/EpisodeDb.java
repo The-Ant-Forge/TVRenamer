@@ -46,8 +46,8 @@ public class EpisodeDb implements java.beans.PropertyChangeListener {
         final FileEpisode episode = new FileEpisode(path);
         episode.setIgnoreReason(ignorableReason(pathname));
         if (!episode.wasParsed()) {
-            // Note: unparsed files are still inserted so users can see what failed.
-            // Follow-up UX improvements are tracked in docs/todo.md ("Improve handling of \"unparsed\" files").
+            // Note: unparsed files are still inserted so users can see what failed
+            // (the row shows the parse-failure reason; see docs/Completed.md #26).
             logger.warning("Couldn't parse file: " + pathname);
         }
         episodes.put(pathname, episode);

@@ -40,7 +40,8 @@
     </ol>
 
     <h4>Using ffmpeg instead</h4>
-    <p>If AtomicParsley is not found, TVRenamer falls back to ffmpeg (which must be in your PATH). ffmpeg is a valid alternative but AtomicParsley is preferred as it performs more efficient, surgical metadata edits.</p>
+    <p>If AtomicParsley is not found, TVRenamer falls back to ffmpeg (which must be in your PATH). ffmpeg is a valid alternative, but AtomicParsley is preferred: it edits the metadata in place, while ffmpeg writes a complete new copy of the file (keeping every video, audio and subtitle track) and then replaces the original. With ffmpeg, tagging takes longer and needs free space for a second copy of each file.</p>
+    <p>TVRenamer looks for these tools when it starts, so restart it after installing one.</p>
 
     <h3>MKV / WebM</h3>
     <p><strong>Requires MKVToolNix</strong> - Free, open-source software.</p>

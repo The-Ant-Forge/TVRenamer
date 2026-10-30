@@ -53,10 +53,13 @@
     </ul>
 
     <h3>Step 4: Rename</h3>
-    <p>Select files and click <strong>Rename Selected</strong>, or press <kbd>Ctrl+R</kbd>.</p>
+    <p>Make sure the checkbox is ticked on each row you want to process, then click the action
+    button. Its label follows your Preferences: <strong>Rename Checked</strong>,
+    <strong>Move Checked</strong>, or <strong>Rename &amp; Move Checked</strong>.</p>
 
     <div class="tip">
-        <strong>Tip:</strong> Use <kbd>Ctrl+A</kbd> to select all files, then <kbd>Ctrl+R</kbd> to rename everything at once.
+        <strong>Tip:</strong> The action button works on <em>ticked</em> rows, not on highlighted
+        (selected) ones. Untick any row you want to leave alone for now.
     </div>
 
     <h2>Understanding the Interface</h2>
@@ -68,12 +71,17 @@
             <th>Description</th>
         </tr>
         <tr>
-            <td>Current Name</td>
+            <td>&#9989; (checkbox)</td>
+            <td>Whether the row is processed when you click the action button</td>
+        </tr>
+        <tr>
+            <td>Current File</td>
             <td>Original filename (before renaming)</td>
         </tr>
         <tr>
-            <td>Proposed Name</td>
-            <td>New filename (after renaming). Shows error messages if parsing failed.</td>
+            <td>Proposed File Name / Proposed File Path</td>
+            <td>New name after renaming (the full destination path when moving is enabled).
+            Shows the reason if parsing or lookup failed.</td>
         </tr>
         <tr>
             <td>Status</td>
@@ -92,8 +100,8 @@
             <td>Select all files</td>
         </tr>
         <tr>
-            <td><kbd>Ctrl+R</kbd></td>
-            <td>Rename selected files</td>
+            <td><kbd>F1</kbd></td>
+            <td>Open Help</td>
         </tr>
         <tr>
             <td><kbd>Ctrl+P</kbd></td>
@@ -104,7 +112,7 @@
             <td>Quit application</td>
         </tr>
         <tr>
-            <td><kbd>Delete</kbd></td>
+            <td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td>
             <td>Remove selected files from list</td>
         </tr>
     </table>

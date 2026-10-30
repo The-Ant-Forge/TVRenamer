@@ -47,7 +47,9 @@ TVRenamer can optionally write TV episode metadata directly into video files. Th
 
 ### External Tools
 - **AtomicParsley** (preferred) — surgical iTunes atom edits, doesn't rewrite media data
-- **ffmpeg** (fallback) — full container rewrite with `-c copy`, ubiquitous
+- **ffmpeg** (fallback) — full container rewrite with `-map 0 -c copy`, ubiquitous.
+  `-map 0` is required: without it ffmpeg's default stream selection keeps one video and
+  one audio stream and drops subtitle tracks, including ones the subtitle merge just added.
 
 ### Atoms Written
 
