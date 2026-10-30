@@ -1,5 +1,14 @@
 A bug-fix release: five fixes to show matching, episode listings and MP4 subtitle merging, plus a refreshed set of help pages.
 
+## Improvements
+
+### Help pages brought up to date
+
+- Help pages now name the action button correctly (**Rename Checked** / **Rename & Move Checked**, which works on ticked rows) and drop a Ctrl+R shortcut that doesn't exist.
+- The full list of rename tokens is documented, including the air-date tokens.
+- Subtitle Merging explains how to pair a subtitle whose name doesn't match its video: add both files to TVRenamer.
+- Metadata Tagging explains the difference between AtomicParsley and ffmpeg, and that tools are detected at startup.
+
 ## Bug fixes
 
 ### Merged MP4 subtitles are no longer removed by tagging
@@ -21,10 +30,3 @@ A pin added for a show already in the table kept showing "not found" until TVRen
 ### The Hint link and overrides use the name the row shows
 
 "click to set Hint" on an unfound row now fills in the name exactly as the row shows it, and overrides match loosely (case, dots, underscores and most punctuation are ignored). Before, an override typed from the row's own text never matched.
-
-## Documentation
-
-- Help pages now name the action button correctly (**Rename Checked** / **Rename & Move Checked**, which works on ticked rows) and drop a Ctrl+R shortcut that doesn't exist.
-- The full list of rename tokens is documented, including the air-date tokens.
-- Subtitle Merging explains how to pair a subtitle whose name doesn't match its video: add both files to TVRenamer.
-- Metadata Tagging explains the difference between AtomicParsley and ffmpeg, and that tools are detected at startup.
