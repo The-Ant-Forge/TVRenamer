@@ -216,29 +216,8 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
             String ext = StringUtils.getExtension(name);
             tempFile = Files.createTempFile(videoFile.getParent(), ".tvr-tag-", ext);
 
-            List<String> cmd = new ArrayList<>();
-            cmd.add(currentToolPath());
-            cmd.add("-y");            // overwrite temp file
-            cmd.add("-i");
-            cmd.add(videoFile.toString());
-            cmd.add("-c");
-            cmd.add("copy");          // no re-encoding
-
-            addFfmpegMeta(cmd, "show", showName);
-            addFfmpegMeta(cmd, "season_number", String.valueOf(season));
-            addFfmpegMeta(cmd, "episode_sort", String.valueOf(episodeNum));
-            addFfmpegMeta(cmd, "title", filenameNoExt);
-            addFfmpegMeta(cmd, "album", showName);
-
-            if (episodeTitle != null && !episodeTitle.isBlank()) {
-                addFfmpegMeta(cmd, "episode_id", episodeTitle);
-            }
-            if (airDateStr != null) {
-                addFfmpegMeta(cmd, "date", airDateStr);
-            }
-            addFfmpegMeta(cmd, "media_type", "10");
-
-            cmd.add(tempFile.toString());
+            List<String> cmd = buildFfmpegCommand(currentToolPath(), videoFile, tempFile,
+                showName, season, episodeNum, episodeTitle, filenameNoExt, airDateStr);
 
             boolean ok = runProcess(cmd, videoFile);
             if (ok) {
@@ -260,6 +239,44 @@ public class Mp4MetadataTagger implements VideoMetadataTagger {
                 }
             }
         }
+    }
+
+    /**
+     * Build the ffmpeg remux-and-tag command line.  Visible for testing.
+     *
+     * <p>{@code -map 0} is essential: without it ffmpeg's default stream
+     * selection keeps only one video and one audio stream, silently dropping
+     * subtitle tracks (including ones the subtitle merge just added).
+     */
+    static List<String> buildFfmpegCommand(String toolPath, Path videoFile, Path tempFile,
+            String showName, int season, int episodeNum, String episodeTitle,
+            String filenameNoExt, String airDateStr) {
+        List<String> cmd = new ArrayList<>();
+        cmd.add(toolPath);
+        cmd.add("-y");            // overwrite temp file
+        cmd.add("-i");
+        cmd.add(videoFile.toString());
+        cmd.add("-map");
+        cmd.add("0");             // keep every stream, not just best video/audio
+        cmd.add("-c");
+        cmd.add("copy");          // no re-encoding
+
+        addFfmpegMeta(cmd, "show", showName);
+        addFfmpegMeta(cmd, "season_number", String.valueOf(season));
+        addFfmpegMeta(cmd, "episode_sort", String.valueOf(episodeNum));
+        addFfmpegMeta(cmd, "title", filenameNoExt);
+        addFfmpegMeta(cmd, "album", showName);
+
+        if (episodeTitle != null && !episodeTitle.isBlank()) {
+            addFfmpegMeta(cmd, "episode_id", episodeTitle);
+        }
+        if (airDateStr != null) {
+            addFfmpegMeta(cmd, "date", airDateStr);
+        }
+        addFfmpegMeta(cmd, "media_type", "10");
+
+        cmd.add(tempFile.toString());
+        return cmd;
     }
 
     private static void addFfmpegMeta(List<String> cmd, String key, String value) {
