@@ -2,11 +2,11 @@
 # Tooling / plugins
 shadow = "9.6.1"
 launch4j = "4.0.0"
-spotbugs = "6.5.12"
+spotbugs = "6.5.13"
 
 # Runtime dependencies
 swt = "3.135.0"
-gson = "2.14.0"
+gson = "2.15.0"
 
 # Test dependencies
 junit = "6.1.3"
