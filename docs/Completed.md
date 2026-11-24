@@ -1337,6 +1337,23 @@ Completes the code improvement opportunities document (all 24 items done).
     untouched in that case (ffmpeg writes to a temp file).
   - AtomicParsley edits in place and was never affected.
 
+### 75) Remove emptied directories no longer climbs into parent folders
+- **Why:** After a move, "Remove emptied directories" deleted the source folder and then
+  kept walking up, deleting each parent that became empty. Processing the last show in a
+  download folder could delete the download folder itself.
+- **Where:** `org.tvrenamer.controller.util.FileUtilities` (`removeIfEmpty`, replaces
+  `removeWhileEmpty`), `FileMover.tryToMoveRealPaths`, `FileUtilsTest`,
+  `Constants.REMOVE_EMPTIED_TOOLTIP`, `help/preferences.html`.
+- **What we did:**
+  - Only the folder the file was moved out of is removed, and only if it is now empty.
+    Parent folders are never touched.
+  - Emptiness is checked before deleting, so a non-empty folder no longer logs a warning.
+  - Tests pin that an emptied parent and grandparent survive.
+- **Notes:**
+  - Nested layouts (`Show/Season 1/file`) now leave an empty `Show` folder behind.
+    Bounding the walk at the folder the user added would clean more, but `FileMover`
+    does not know that root today.
+
 ---
 
 ## Related records

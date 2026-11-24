@@ -240,6 +240,37 @@ public class FileUtilsTest {
     }
 
     @Test
+    public void testRemoveIfEmptyLeavesEmptiedParent() throws IOException {
+        // downloads/Show/Season 1 -> only "Season 1" goes; "Show" and
+        // "downloads" stay even though removing the child empties them.
+        final Path downloads = tempFolder.resolve("downloads");
+        final Path show = downloads.resolve("Solar Drift");
+        final Path season = show.resolve("Season 1");
+        Files.createDirectories(season);
+
+        assertTrue(removeIfEmpty(season), "empty leaf dir should be removed");
+        assertFalse(Files.exists(season), "leaf dir still exists");
+        assertTrue(Files.isDirectory(show), "parent dir must not be removed");
+        assertTrue(Files.isDirectory(downloads), "grandparent must not be removed");
+    }
+
+    @Test
+    public void testRemoveIfEmptyKeepsNonEmptyDir() throws IOException {
+        final Path dir = tempFolder.resolve("Westmark Academy");
+        Files.createDirectories(dir);
+        Files.createFile(dir.resolve("notes.txt"));
+
+        assertFalse(removeIfEmpty(dir), "non-empty dir reported as removed");
+        assertTrue(Files.isDirectory(dir), "non-empty dir was removed");
+    }
+
+    @Test
+    public void testRemoveIfEmptyNullAndMissing() {
+        assertFalse(removeIfEmpty(null));
+        assertFalse(removeIfEmpty(tempFolder.resolve("does-not-exist")));
+    }
+
+    @Test
     public void testEnsureWritableDirectoryAlreadyExists() {
         final Path dirpath = tempFolder;
 

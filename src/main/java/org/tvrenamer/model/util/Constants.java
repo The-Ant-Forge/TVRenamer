@@ -141,8 +141,8 @@ public class Constants {
     public static final String REMOVE_EMPTIED_TEXT =
         "Remove emptied directories";
     public static final String REMOVE_EMPTIED_TOOLTIP =
-        "When selected, directories which become empty due to file\n" +
-        "movement will be deleted.";
+        "When selected, the folder a file was moved out of is deleted\n" +
+        "if it is left empty. Parent folders are never removed.";
     public static final String CHECK_UPDATES_TEXT =
         "Check for Updates at startup";
     public static final String CHECK_UPDATES_TOOLTIP =

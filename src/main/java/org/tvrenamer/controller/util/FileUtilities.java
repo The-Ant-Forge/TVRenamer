@@ -665,39 +665,31 @@ public class FileUtilities {
     }
 
     /**
-     * If the given argument is an empty directory, remove it; and then, check
-     * if removing it caused its parent to be empty, and if so, remove the parent;
-     * and so on, until we hit a non-empty directory.
+     * If the given argument is an empty directory, remove it. Only that one
+     * directory is considered: its parent is left alone even if removing the
+     * child leaves the parent empty. Walking up the chain could otherwise
+     * delete a folder the user wants to keep, such as a download folder whose
+     * last show subfolder was just emptied.
      *
      * @param dir
-     *    the leaf directory to check for emptiness
-     * @return true if the Path is an existent directory, and we succeeded in removing
-     *    any empty directories we tried; false if the Path was null, didn't exist,
-     *    or was not a directory, or if we can't remove a directory we tried to remove
+     *    the directory to check for emptiness
+     * @return true if the directory was empty and has been removed; false if
+     *    the Path was null, didn't exist, was not a directory, was not empty,
+     *    or could not be removed
      */
-    public static boolean removeWhileEmpty(final Path dir) {
+    public static boolean removeIfEmpty(final Path dir) {
         if (dir == null) {
-            return false;
-        }
-        if (Files.notExists(dir)) {
             return false;
         }
         if (!Files.isDirectory(dir)) {
             return false;
         }
         if (!isDirEmpty(dir)) {
-            // If the directory is not empty, then doing nothing is correct,
-            // and we have succeeded.
-            return true;
+            return false;
         }
-
-        Path parent = dir.getParent();
         boolean success = rmdir(dir);
         if (success) {
             logger.info("removed empty directory " + dir);
-            if (parent != null) {
-                return removeWhileEmpty(parent);
-            }
         }
         return success;
     }

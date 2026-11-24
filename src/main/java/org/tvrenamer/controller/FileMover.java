@@ -546,7 +546,7 @@ public class FileMover implements Callable<Boolean> {
 
         logger.info("successful:\n  " + realSrc + "\n  " + destPath);
         if (userPrefs.isRemoveEmptiedDirectories()) {
-            FileUtilities.removeWhileEmpty(srcDir);
+            FileUtilities.removeIfEmpty(srcDir);
         }
     }
 
