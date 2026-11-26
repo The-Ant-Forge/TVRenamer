@@ -152,7 +152,8 @@ public final class BatchShowDisambiguationDialog extends Dialog {
         dialogShell.open();
 
         // Start in downloading mode; caller will stop it when discovery completes.
-        setDownloading(true);
+        // An on-demand "Choose Show..." dialog already has all its results.
+        setDownloading(startDownloading);
 
         DialogHelper.runModalLoop(dialogShell);
 
@@ -166,6 +167,21 @@ public final class BatchShowDisambiguationDialog extends Dialog {
 
     private boolean cancelled = false;
 
+    // Whether the title shows the "Downloading" spinner on open.  True for the
+    // automatic dialog, which keeps receiving results while lookups finish.
+    private boolean startDownloading = true;
+
+    /**
+     * Set whether the dialog opens showing the "Downloading" spinner.  Call
+     * before {@link #open()}.  The on-demand "Choose Show..." dialog passes
+     * false, since its results are complete before it opens.
+     *
+     * @param startDownloading true to show the spinner on open
+     */
+    public void setStartDownloading(final boolean startDownloading) {
+        this.startDownloading = startDownloading;
+    }
+
     private void createContents(final Shell shell) {
         GridLayout layout = new GridLayout(1, false);
         layout.marginWidth = 12;
@@ -176,9 +192,11 @@ public final class BatchShowDisambiguationDialog extends Dialog {
         Label header = new Label(shell, SWT.WRAP);
         header.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
         header.setText(
-            "Some shows matched multiple results. Showing first " +
+            "Choose the correct show for each name (up to " +
                 MAX_OPTIONS_PER_SHOW +
-                " results per show. Please choose the correct show for each."
+                " results per show are listed).\n" +
+                "Your choice applies to every file with that show name, and is " +
+                "remembered under Preferences > Matching."
         );
 
         SashForm sash = new SashForm(shell, SWT.HORIZONTAL);
@@ -215,7 +233,7 @@ public final class BatchShowDisambiguationDialog extends Dialog {
 
     private void createLeftPane(final Composite parent) {
         Label label = new Label(parent, SWT.NONE);
-        label.setText("Ambiguous Shows");
+        label.setText("Shows");
 
         leftTable = new Table(
             parent,

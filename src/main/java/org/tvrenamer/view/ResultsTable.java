@@ -42,6 +42,9 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
+import org.eclipse.swt.widgets.Menu;
+import org.eclipse.swt.widgets.MenuItem;
+import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.ProgressBar;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Table;
@@ -65,6 +68,7 @@ import org.tvrenamer.model.Series;
 import org.tvrenamer.model.Show;
 import org.tvrenamer.model.ShowName;
 import org.tvrenamer.model.ShowStore;
+import org.tvrenamer.model.TVRenamerIOException;
 import org.tvrenamer.model.UserPreference;
 import org.tvrenamer.model.UserPreferences;
 
@@ -497,8 +501,10 @@ public final class ResultsTable
 
     /**
      * Embeds a clickable Link widget in the "Proposed File Path" cell for rows
-     * where the show was not found. Clicking the link opens Preferences with the
-     * Matching tab selected and the extracted show name pre-filled.
+     * where the show was not found. The provider search already came back
+     * empty, so searching again would only fail again: the link opens
+     * Preferences > Matching for the show instead, where the user can search
+     * under a different name.
      */
     private void setUnfoundShowLink(
         final TableItem item,
@@ -509,24 +515,16 @@ public final class ResultsTable
             return;
         }
         final Link link = new Link(swtTable, SWT.NONE);
-        link.setText(displayText + " \u2014 <a>click to set Hint</a>");
+        link.setText(displayText + " - <a>add a rule in Preferences > Matching</a>");
         link.setToolTipText(
-            "Opens Preferences \u2192 Matching to add a show name override"
+            "No show matched this name. Opens Preferences > Matching with the\n" +
+                "name filled in, so you can search under a different name"
         );
 
         link.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
-                // Pre-fill the normalized query string: it is the text the row
-                // shows ("No info for ...") and what the provider was asked, so
-                // the user sees one consistent name. Overrides match on this
-                // normalized form (see UserPreferences.resolveShowName).
-                String queryString = StringUtils.makeQueryString(
-                    ep.getExtractedFilenameShow()
-                );
-                PreferencesDialog preferencesDialog =
-                    new PreferencesDialog(shell);
-                preferencesDialog.open(2, queryString);
+                openMatchingRule(ep.getExtractedFilenameShow());
             }
         });
 
@@ -1053,9 +1051,6 @@ public final class ResultsTable
         batchDisambiguationDialog = dialog;
         batchDisambiguationDialogOpen = true;
 
-        // Track resolved queryStrings so we can remove only those from the pending queue.
-        final HashSet<String> resolvedQueryStrings = new HashSet<>();
-
         try {
             logger.info("Batch show disambiguation: opening dialog...");
             Map<String, String> selections = dialog.open();
@@ -1081,52 +1076,7 @@ public final class ResultsTable
                     " selection(s)"
             );
 
-            // Apply selections (persist + update prefs). We intentionally allow partial resolution.
-            // Persisting an override fires SHOW_NAME_OVERRIDES once per selection; suppress the
-            // event-driven re-match during this window and run a single explicit pass below.
-            suppressOverrideRematch = true;
-            try {
-                for (Map.Entry<String, String> sel : selections.entrySet()) {
-                    String queryString = sel.getKey();
-                    String chosenId = sel.getValue();
-                    if (queryString == null || queryString.isBlank()) {
-                        continue;
-                    }
-                    if (chosenId == null || chosenId.isBlank()) {
-                        continue;
-                    }
-                    ShowStore.applyShowDisambiguationSelection(
-                        queryString,
-                        chosenId
-                    );
-                    resolvedQueryStrings.add(queryString);
-                }
-            } finally {
-                suppressOverrideRematch = false;
-            }
-
-            // Remove only resolved items; keep unresolved pending so the user can reopen via the button later.
-            if (!resolvedQueryStrings.isEmpty()) {
-                ShowStore.removePendingDisambiguations(resolvedQueryStrings);
-            }
-
-            // Re-trigger lookup for each affected item, matched on the provider query string
-            // (derived from the effective, override-applied show name) rather than the raw
-            // extracted name -- that is what we disambiguate and persist.
-            final HashSet<String> affectedQueryStrings = new HashSet<>(
-                resolvedQueryStrings
-            );
-            if (affectedQueryStrings.isEmpty()) {
-                return true;
-            }
-            rematchRows(episode ->
-                affectedQueryStrings.contains(
-                    StringUtils.makeQueryString(
-                        prefs.resolveShowName(episode.getExtractedFilenameShow())
-                    )
-                )
-            );
-
+            applyShowSelections(selections);
             return true;
         } finally {
             // Ensure any "Downloading" title animation is stopped when the dialog closes.
@@ -1142,6 +1092,291 @@ public final class ResultsTable
         }
 
         // (Selection apply + queue clear + re-trigger lookups are handled above within the try block.)
+    }
+
+    /**
+     * Persist the shows the user chose (query string -> series id), drop them
+     * from the pending queue, and re-match every row with one of those query
+     * strings.  Shared by the automatic "Select Shows" dialog and the
+     * "Choose Show..." action.  Partial selections are fine: only the query
+     * strings actually chosen are applied.
+     *
+     * @param selections map of query string -> chosen provider series id
+     */
+    private void applyShowSelections(final Map<String, String> selections) {
+        final HashSet<String> resolvedQueryStrings = new HashSet<>();
+
+        // Persisting an override fires SHOW_NAME_OVERRIDES once per selection; suppress the
+        // event-driven re-match during this window and run a single explicit pass below.
+        suppressOverrideRematch = true;
+        try {
+            for (Map.Entry<String, String> sel : selections.entrySet()) {
+                String queryString = sel.getKey();
+                String chosenId = sel.getValue();
+                if (queryString == null || queryString.isBlank()) {
+                    continue;
+                }
+                if (chosenId == null || chosenId.isBlank()) {
+                    continue;
+                }
+                ShowStore.applyShowDisambiguationSelection(queryString, chosenId);
+                resolvedQueryStrings.add(queryString);
+            }
+        } finally {
+            suppressOverrideRematch = false;
+        }
+
+        if (resolvedQueryStrings.isEmpty()) {
+            return;
+        }
+
+        // Remove only resolved items; keep unresolved pending so the user can reopen via the button later.
+        ShowStore.removePendingDisambiguations(resolvedQueryStrings);
+
+        // Re-trigger lookup for each affected item, matched on the provider query string
+        // (derived from the effective, override-applied show name) rather than the raw
+        // extracted name -- that is what we disambiguate and persist.
+        rematchRows(episode ->
+            resolvedQueryStrings.contains(
+                StringUtils.makeQueryString(
+                    prefs.resolveShowName(episode.getExtractedFilenameShow())
+                )
+            )
+        );
+    }
+
+    // True while a "Choose Show..." provider search is running, so a second
+    // request (double-click on the link, repeated menu use) is ignored.
+    private boolean chooseShowSearchRunning = false;
+
+    /** One show to offer in "Choose Show...", built on the UI thread. */
+    private record ChooseShowRequest(
+        String lookupName,
+        String extractedName,
+        String exampleFileName
+    ) {}
+
+    /**
+     * The episode behind a table row, if the row is one whose show can be
+     * re-chosen: parsed, with a show name, and not already moved.
+     */
+    private FileEpisode episodeForShowChoice(final TableItem item) {
+        if (item == null || item.isDisposed()) {
+            return null;
+        }
+        if (Boolean.TRUE.equals(item.getData(MOVE_COMPLETED_KEY))) {
+            return null;
+        }
+        FileEpisode ep = episodeMap.get(CURRENT_FILE_FIELD.getCellText(item));
+        if (ep == null || !ep.wasParsed()) {
+            return null;
+        }
+        if (StringUtils.isBlank(ep.getExtractedFilenameShow())) {
+            return null;
+        }
+        return ep;
+    }
+
+    /**
+     * "Choose Show...": search the provider for the shows of the given rows
+     * and let the user pick the right one for each, in the same dialog used
+     * for ambiguous matches.  Rows sharing a show name appear once.  Names
+     * with no results are reported, with an offer to add a matching rule.
+     *
+     * @param items the rows to choose shows for
+     */
+    private void chooseShowForItems(final List<TableItem> items) {
+        if (chooseShowSearchRunning || batchDisambiguationDialogOpen) {
+            return;
+        }
+        // One request per query string: that is the unit a choice applies to.
+        final Map<String, ChooseShowRequest> requests = new LinkedHashMap<>();
+        for (TableItem item : items) {
+            FileEpisode ep = episodeForShowChoice(item);
+            if (ep == null) {
+                continue;
+            }
+            String extracted = ep.getExtractedFilenameShow();
+            String lookupName = prefs.resolveShowName(extracted);
+            requests.putIfAbsent(
+                StringUtils.makeQueryString(lookupName),
+                new ChooseShowRequest(lookupName, extracted, ep.getFileName())
+            );
+        }
+        if (requests.isEmpty()) {
+            return;
+        }
+
+        chooseShowSearchRunning = true;
+        shell.setCursor(display.getSystemCursor(SWT.CURSOR_WAIT));
+        Thread searcher = new Thread(() -> {
+            final Map<String, ShowStore.PendingDisambiguation> found =
+                new LinkedHashMap<>();
+            final List<String> noMatches = new LinkedList<>();
+            String error = null;
+            for (ChooseShowRequest req : requests.values()) {
+                try {
+                    ShowStore.PendingDisambiguation pd =
+                        ShowStore.searchCandidates(
+                            req.lookupName(),
+                            req.extractedName(),
+                            req.exampleFileName()
+                        );
+                    if (pd.options == null || pd.options.isEmpty()) {
+                        noMatches.add(req.lookupName());
+                    } else {
+                        found.put(pd.queryString, pd);
+                    }
+                } catch (TVRenamerIOException | RuntimeException e) {
+                    logger.log(Level.WARNING,
+                        "Choose Show: search failed for " + req.lookupName(), e);
+                    error = (e.getMessage() == null)
+                        ? e.getClass().getSimpleName()
+                        : e.getMessage();
+                    break;
+                }
+            }
+            final String searchError = error;
+            if (display.isDisposed()) {
+                return;
+            }
+            display.asyncExec(() -> {
+                chooseShowSearchRunning = false;
+                if (shell.isDisposed()) {
+                    return;
+                }
+                shell.setCursor(null);
+                showChooseShowResults(found, noMatches, searchError, requests);
+            });
+        }, "ChooseShowSearch");
+        searcher.setDaemon(true);
+        searcher.start();
+    }
+
+    /**
+     * UI-thread half of {@link #chooseShowForItems}: open the chooser for the
+     * names that had results, then report the ones that had none.
+     */
+    private void showChooseShowResults(
+        final Map<String, ShowStore.PendingDisambiguation> found,
+        final List<String> noMatches,
+        final String searchError,
+        final Map<String, ChooseShowRequest> requests
+    ) {
+        if (searchError != null) {
+            ui.showMessageBox(
+                SWTMessageBoxType.DLG_ERR,
+                CHOOSE_SHOW_TITLE,
+                "Could not search for shows: " + searchError
+            );
+            return;
+        }
+
+        if (!found.isEmpty() && !batchDisambiguationDialogOpen) {
+            BatchShowDisambiguationDialog dialog =
+                new BatchShowDisambiguationDialog(shell, found);
+            dialog.setStartDownloading(false);
+            // Register as the open dialog so automatic ambiguities that arrive
+            // meanwhile stream into it instead of opening a second dialog.
+            batchDisambiguationDialog = dialog;
+            batchDisambiguationDialogOpen = true;
+            try {
+                Map<String, String> selections = dialog.open();
+                if (selections != null) {
+                    applyShowSelections(selections);
+                }
+            } finally {
+                batchDisambiguationDialogOpen = false;
+                batchDisambiguationDialog = null;
+            }
+        }
+
+        if (!noMatches.isEmpty()) {
+            MessageBox box = new MessageBox(
+                shell, SWT.ICON_INFORMATION | SWT.YES | SWT.NO
+            );
+            box.setText(CHOOSE_SHOW_TITLE);
+            box.setMessage(
+                "No shows found for: " + String.join(", ", noMatches) +
+                    "\n\nOpen Preferences > Matching to search under a different name?"
+            );
+            if (box.open() == SWT.YES) {
+                String first = noMatches.get(0);
+                ChooseShowRequest req =
+                    requests.get(StringUtils.makeQueryString(first));
+                openMatchingRule(
+                    (req == null) ? first : req.extractedName()
+                );
+            }
+        }
+    }
+
+    /**
+     * Open Preferences on the Matching tab for the given extracted show, with
+     * both key fields filled in so the user can see what TVRenamer extracted
+     * and what it searched for, and "Replace with" holding the current
+     * effective name as a starting point to edit.  Every route into Matching from the main
+     * window (the row menu, and Choose Show finding nothing) comes here.
+     *
+     * The two keys differ when an override already applies: "Extracted show"
+     * is the name from the filename, while the disambiguation "Query string"
+     * is the name actually searched for, after the override.
+     *
+     * @param extractedName the show name as extracted from the filename
+     */
+    private void openMatchingRule(final String extractedName) {
+        PreferencesDialog preferencesDialog = new PreferencesDialog(shell);
+        preferencesDialog.open(
+            2,
+            StringUtils.makeQueryString(extractedName),
+            prefs.resolveShowName(extractedName),
+            StringUtils.makeQueryString(prefs.resolveShowName(extractedName))
+        );
+    }
+
+    /**
+     * Right-click menu for the results table: "Choose Show..." for the
+     * selected rows and "Edit Matching Rule..." for the first selected row.
+     * Embedded cell widgets (the episode drop-down, the unfound-show link)
+     * do not pass right-clicks to the table, so right-click elsewhere on
+     * the row, such as the file name.
+     */
+    private void setupRowContextMenu() {
+        final Menu menu = new Menu(swtTable);
+
+        final MenuItem chooseShowItem = new MenuItem(menu, SWT.PUSH);
+        chooseShowItem.setText(CHOOSE_SHOW_MENU_TEXT);
+        chooseShowItem.addListener(SWT.Selection, e ->
+            chooseShowForItems(List.of(swtTable.getSelection()))
+        );
+
+        final MenuItem matchingItem = new MenuItem(menu, SWT.PUSH);
+        matchingItem.setText(EDIT_MATCHING_RULE_MENU_TEXT);
+        matchingItem.addListener(SWT.Selection, e -> {
+            for (TableItem item : swtTable.getSelection()) {
+                FileEpisode ep = episodeForShowChoice(item);
+                if (ep != null) {
+                    openMatchingRule(ep.getExtractedFilenameShow());
+                    return;
+                }
+            }
+        });
+
+        // Enable the items only when the selection has a row they can act on.
+        menu.addListener(SWT.Show, e -> {
+            boolean any = false;
+            for (TableItem item : swtTable.getSelection()) {
+                if (episodeForShowChoice(item) != null) {
+                    any = true;
+                    break;
+                }
+            }
+            boolean idle = !chooseShowSearchRunning;
+            chooseShowItem.setEnabled(any && idle);
+            matchingItem.setEnabled(any);
+        });
+
+        swtTable.setMenu(menu);
     }
 
     /**
@@ -1762,6 +1997,15 @@ public final class ResultsTable
             if (forgetCachedFailures) {
                 ShowStore.forgetFailedLookup(newName);
             }
+            // A show pinned for this name that differs from the cached match
+            // (the user re-chose an already matched show) must be fetched
+            // afresh; otherwise the cache hands back the old show.
+            ShowStore.forgetLookupIfNotPinned(
+                newName,
+                prefs.resolveDisambiguatedSeriesId(
+                    StringUtils.makeQueryString(newName)
+                )
+            );
             STATUS_FIELD.setCellImage(item, DOWNLOADING);
 
             ShowStore.mapStringToShow(
@@ -2543,6 +2787,7 @@ public final class ResultsTable
         editor.grabHorizontal = true;
 
         setupSelectionListener();
+        setupRowContextMenu();
 
         // When provider lookups enqueue ambiguous shows, ShowStore notifies listeners.
         // Behavior:

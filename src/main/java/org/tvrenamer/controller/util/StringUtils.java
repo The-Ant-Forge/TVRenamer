@@ -35,6 +35,9 @@ public class StringUtils {
         Pattern.compile("(\\p{Lower})-(\\p{Lower})");
     private static final Pattern PAT_CAMEL_CAPS =
         Pattern.compile("(\\p{Lower})([\\p{Upper}\\p{Digit}])");
+    // Characters that already separate words in a show name: whitespace, or the
+    // dot, underscore and hyphen commonly used in place of spaces in filenames.
+    private static final Pattern PAT_WORD_SEPARATOR = Pattern.compile("[\\s._-]");
     private static final Pattern PAT_DIGIT_UPPER =
         Pattern.compile("(\\p{Digit})([\\p{Upper}])");
     private static final Pattern PAT_ACRONYM =
@@ -418,8 +421,14 @@ public class StringUtils {
             rval = PAT_HYPHEN_LOWER_SPLIT.matcher(rval).replaceAll("$1$2");
         }
 
-        // transform "CamelCaps" => "Camel Caps"
-        rval = PAT_CAMEL_CAPS.matcher(rval).replaceAll("$1 $2");
+        // transform "CamelCaps" => "Camel Caps", but only for a run-together name
+        // ("TheBigShow") that has no word separators of its own.  Once a name is
+        // already split into words, an inner capital is part of the title's own
+        // spelling ("Solar Drift StarBase"), and splitting it makes the provider
+        // search for a different, often unfindable, name.
+        if (!PAT_WORD_SEPARATOR.matcher(s).find()) {
+            rval = PAT_CAMEL_CAPS.matcher(rval).replaceAll("$1 $2");
+        }
 
         // example: "30Rock" => "30 Rock"
         rval = PAT_DIGIT_UPPER.matcher(rval).replaceAll("$1 $2");

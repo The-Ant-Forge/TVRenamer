@@ -466,6 +466,68 @@ public class ShowStore {
     }
 
     /**
+     * Invalidate a cached lookup for the given filename show when it is not
+     * the series pinned for its query string, so the next call to
+     * {@link #mapStringToShow} re-queries the provider and honours the pin.
+     *
+     * This makes re-choosing a show that already matched take effect: the
+     * query string does not change, so without this the old match would be
+     * replayed from the cache.  A match that already is the pinned series,
+     * or a name with no pin, is left alone.
+     *
+     * @param filenameShow the name of the show as it appears in the filename
+     * @param pinnedId the series id pinned for that name's query string; may be null
+     */
+    public static void forgetLookupIfNotPinned(
+        final String filenameShow,
+        final String pinnedId
+    ) {
+        if (filenameShow == null) {
+            return;
+        }
+        ShowName showName = ShowName.mapShowName(filenameShow);
+        if (showName.forgetMatchIfNotPinned(pinnedId)) {
+            logger.fine(
+                "forgot cached lookup for " + filenameShow +
+                    " (pinned to " + pinnedId + ")"
+            );
+        }
+    }
+
+    /**
+     * Ask the current provider for every show matching the given name, ranked
+     * best-first, for the user to choose from.  Unlike a normal lookup this
+     * never auto-resolves and never touches the cache: it only lists.
+     *
+     * Blocks on the network; call it off the UI thread.
+     *
+     * @param lookupName the effective (override-applied) show name to search for
+     * @param extractedShowName the name as extracted from the filename, for display
+     * @param exampleFileName a file with this show, for display
+     * @return the candidates, with {@code options} empty if there were none
+     * @throws TVRenamerIOException if the provider could not be reached
+     * @throws DiscontinuedApiException if the provider's API is gone
+     */
+    public static PendingDisambiguation searchCandidates(
+        final String lookupName,
+        final String extractedShowName,
+        final String exampleFileName
+    ) throws TVRenamerIOException, DiscontinuedApiException {
+        ShowName searchName = ShowName.searchOnly(lookupName);
+        String queryString = searchName.getQueryString();
+        String pinnedId = prefs.resolveDisambiguatedSeriesId(queryString);
+        TvdbProviders.current().getShowOptions(searchName, pinnedId);
+        List<ShowOption> options = searchName.getShowOptions();
+        return new PendingDisambiguation(
+            queryString,
+            extractedShowName,
+            exampleFileName,
+            options,
+            ShowSelectionEvaluator.rankOptions(lookupName, options)
+        );
+    }
+
+    /**
      * Download information about shows that match the given ShowName, and
      * choose the best option, if one exists.
      *

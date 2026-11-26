@@ -57,6 +57,31 @@ public class ShowSelectionEvaluatorTest {
         SOME_SHOW_2015 = new ShowOption("90111", "Some Show", 2015, Collections.emptyList());
     }
 
+    // ========== rankOptions (Choose Show...) ==========
+
+    @Test
+    @DisplayName("rankOptions scores every candidate best-first, even when one would auto-resolve")
+    void testRankOptionsOrdersBestFirst() {
+        List<ShowSelectionEvaluator.ScoredOption> ranked =
+            ShowSelectionEvaluator.rankOptions(
+                "The Night Shift",
+                List.of(NIGHT_SHIFT_IN, NIGHT_SHIFT, NIGHT_SHIFT_CN)
+            );
+
+        assertEquals(3, ranked.size(), "no candidate may be dropped");
+        assertSame(NIGHT_SHIFT, ranked.get(0).option(), "exact name ranks first");
+        assertEquals(1.0, ranked.get(0).score(), 0.0001);
+        assertTrue(ranked.get(1).score() <= ranked.get(0).score());
+        assertTrue(ranked.get(2).score() <= ranked.get(1).score());
+    }
+
+    @Test
+    @DisplayName("rankOptions handles null and empty lists")
+    void testRankOptionsEmpty() {
+        assertTrue(ShowSelectionEvaluator.rankOptions("x", null).isEmpty());
+        assertTrue(ShowSelectionEvaluator.rankOptions("x", List.of()).isEmpty());
+    }
+
     // ========== NOT_FOUND Tests ==========
 
     @Test

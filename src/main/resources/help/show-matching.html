@@ -38,9 +38,9 @@
 
     <p>The extracted name is matched loosely: case, dots, underscores and most punctuation
     are ignored, so <code>Solar_Drift</code>, <code>solar.drift</code> and
-    <code>solar drift</code> all count as the same name. Clicking <strong>click to set
-    Hint</strong> on an unfound row fills in the name exactly as the row shows it (the
-    text in <em>No info for "..."</em>), which is the form the provider was searched with.</p>
+    <code>solar drift</code> all count as the same name. Right-clicking a row and choosing
+    <strong>Edit Matching Rule...</strong> fills in the name exactly as the provider was
+    searched with it (the text in <em>No info for "..."</em> on an unfound row).</p>
 
     <p>A new entry appears at the top of the table, so you can see what you just added
     without scrolling a long list; it takes its alphabetical place the next time you open
@@ -55,10 +55,14 @@
     until the check finishes.</p>
 
     <div class="tip">
-        <strong>Shortcut:</strong> When a show can't be found, the Proposed File Path column shows a
-        clickable <em>"click to set Hint"</em> link. Clicking it opens Preferences directly on the
-        Matching tab with the show name already filled in &mdash; just type the correct name and save.
-        Any unfound shows whose override changed are automatically retried when you save.
+        <strong>Shortcut:</strong> Right-click any row and choose <strong>Edit Matching
+        Rule...</strong>. Preferences opens on the Matching tab with the override's
+        <em>Extracted show</em> and the disambiguation's <em>Query string</em> filled in from
+        that row, so you can see what TVRenamer extracted and searched for. <em>Replace
+        with</em> starts as the current name, selected: type over it or edit it, click
+        <strong>Add / Update</strong>, then save. Rows whose result would change are retried
+        automatically. Right-click the file name rather than the Proposed File Path cell: a
+        drop-down or link in that cell has its own right-click.
     </div>
 
     <h3>Override Examples</h3>
@@ -98,6 +102,16 @@
         <li><strong>Aliases</strong> - Alternative names</li>
     </ul>
 
+    <h3>Choosing a Show Yourself</h3>
+    <p>To pick the show for a file at any time, including one that matched the wrong show,
+       right-click its row and choose <strong>Choose Show...</strong>. TVRenamer searches the
+       data provider again and opens the same dialog with every result, best match first.
+       Select several rows to choose for several shows at once; rows with the same show name
+       appear once. If the search finds nothing, TVRenamer says so and offers to open the
+       Matching tab, with the same fields filled in, so you can search under a different name.</p>
+    <p>Your choice applies to every file with that show name, not just the row you clicked,
+       and those rows are re-matched straight away.</p>
+
     <h3>Remembered Selections</h3>
     <p>Your disambiguation choice is saved automatically. Future files with the same query will use your selection without prompting.</p>
     <p>A remembered selection is looked up by its Provider ID, so it keeps working even if the
@@ -125,10 +139,14 @@
     <h2>Troubleshooting Match Issues</h2>
 
     <h3>Show Not Found</h3>
-    <p>When a show can't be found, the Proposed File Path column displays a
-       <em>"click to set Hint"</em> link. Click it to jump straight to the
-       Preferences Matching tab with the show name pre-filled, then type the
-       correct show name and save.</p>
+    <p>When a show can't be found, the Proposed File Path column displays an
+       <em>"add a rule in Preferences &gt; Matching"</em> link. Click it to jump straight
+       to the Matching tab with the show name pre-filled, then type the name to search
+       for instead and save.</p>
+    <p>A provider's search can be literal about spacing: a filename that splits a
+       run-together title into two words (or joins two words into one) may find nothing,
+       while the title spelled the provider's way is found straight away. An override
+       with the provider's spelling fixes this.</p>
     <p>Other things to try:</p>
     <ul>
         <li>Check the spelling in your filename</li>
@@ -142,9 +160,9 @@
 
     <h3>Wrong Show Selected</h3>
     <ul>
-        <li>Clear the remembered disambiguation in Preferences</li>
-        <li>Re-add the files to trigger a new lookup</li>
-        <li>Select the correct show when prompted</li>
+        <li>Right-click the row and choose <strong>Choose Show...</strong>, then pick the
+            correct show. Every file with that show name is re-matched.</li>
+        <li>Or clear the remembered disambiguation in Preferences and re-add the files</li>
     </ul>
 
     <h3>Wrong Episodes</h3>

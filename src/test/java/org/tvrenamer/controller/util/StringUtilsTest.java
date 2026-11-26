@@ -382,6 +382,12 @@ public class StringUtilsTest {
         assertEquals("Elm vs Wild", replacePunctuation("Elm vs. Wild"));
         assertEquals("The Q Files", replacePunctuation("The Q-Files"));
         assertEquals("Lore Busters", replacePunctuation("LoreBusters"));
+        // An inner capital in a name already split into words is the title's
+        // own spelling; splitting it made the provider search come back empty.
+        assertEquals("Solar Drift StarBase", replacePunctuation("Solar Drift StarBase"));
+        assertEquals("Westmarks LabWorks", replacePunctuation("Westmark's LabWorks"));
+        assertEquals("Solar Drift StarBase", replacePunctuation("Solar.Drift.StarBase"));
+        assertEquals("solar drift starbase", makeQueryString("Solar_Drift_StarBase"));
         assertEquals("Greyish", replacePunctuation("Grey-ish"));
         assertEquals("40 Flock", replacePunctuation("40Flock"));
         assertEquals("Dr Cobalt", replacePunctuation("Dr. Cobalt"));

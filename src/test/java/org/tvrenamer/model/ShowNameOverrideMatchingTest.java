@@ -14,7 +14,7 @@ import org.tvrenamer.controller.util.StringUtils;
  * Tests how show name override keys are matched against the name parsed from a
  * filename.
  *
- * The "click to set Hint" link pre-fills the normalized query string (the text
+ * "Edit Matching Rule..." pre-fills the normalized query string (the text
  * the row shows), while the parser hands resolveShowName the raw name with its
  * underscores and capitals. Both spellings of a key must therefore match.
  */

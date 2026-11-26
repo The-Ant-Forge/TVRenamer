@@ -302,6 +302,8 @@ class PreferencesDialog extends Dialog {
     // Optional initial state applied when opening with a specific tab and pre-filled text.
     private int initialTabIndex = -1;
     private String initialOverrideFromText = null;
+    private String initialOverrideToText = null;
+    private String initialDisambiguationQueryText = null;
 
     private final Shell parent;
     private final StatusLabel statusLabel;
@@ -1967,7 +1969,7 @@ class PreferencesDialog extends Dialog {
         Label queryLabel = new Label(overridesGroup, SWT.NONE);
         queryLabel.setText("Query string");
         queryLabel.setToolTipText(
-            "Provider query string (normalized). Example: the rookie"
+            "Provider query string (normalized). Example: solar drift"
         );
 
         disambiguationsQueryText = createText("", overridesGroup, false);
@@ -2917,8 +2919,19 @@ class PreferencesDialog extends Dialog {
                 && overridesFromText != null) {
             overridesFromText.setText(initialOverrideFromText);
             if (overridesToText != null) {
+                if (initialOverrideToText != null
+                        && !initialOverrideToText.isEmpty()) {
+                    // Selected, so typing replaces it; arrow keys edit it.
+                    overridesToText.setText(initialOverrideToText);
+                    overridesToText.selectAll();
+                }
                 overridesToText.setFocus();
             }
+        }
+        if (initialDisambiguationQueryText != null
+                && !initialDisambiguationQueryText.isEmpty()
+                && disambiguationsQueryText != null) {
+            disambiguationsQueryText.setText(initialDisambiguationQueryText);
         }
 
         preferencesShell.pack();
@@ -2941,17 +2954,29 @@ class PreferencesDialog extends Dialog {
 
     /**
      * Opens the preferences dialog, auto-selecting the given tab and
-     * optionally pre-filling the "Extracted show" override text field.
+     * optionally pre-filling the Matching tab's two key fields, so the user
+     * sees what TVRenamer extracted and searched for.  Focus goes to
+     * "Replace with", ready to type an override.
      *
      * @param tabIndex
      *     the zero-based tab index to select (0 = General, 1 = Rename, 2 = Matching)
      * @param overrideFromText
-     *     if non-null/non-empty, pre-fills the "Extracted show" text field
-     *     on the Matching tab
+     *     if non-empty, pre-fills the Overrides "Extracted show" field
+     * @param overrideToText
+     *     if non-empty, pre-fills (selected) the Overrides "Replace with" field
+     * @param disambiguationQueryText
+     *     if non-empty, pre-fills the Disambiguations "Query string" field
      */
-    public void open(final int tabIndex, final String overrideFromText) {
+    public void open(
+        final int tabIndex,
+        final String overrideFromText,
+        final String overrideToText,
+        final String disambiguationQueryText
+    ) {
         this.initialTabIndex = tabIndex;
         this.initialOverrideFromText = overrideFromText;
+        this.initialOverrideToText = overrideToText;
+        this.initialDisambiguationQueryText = disambiguationQueryText;
         open();
     }
 

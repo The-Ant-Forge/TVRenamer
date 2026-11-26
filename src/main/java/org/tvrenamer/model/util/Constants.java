@@ -103,6 +103,9 @@ public class Constants {
     public static final String SAVE_LABEL = "Save";
     public static final String ERROR_LABEL = "Error";
     public static final String PARSE_SUMMARY_TITLE = "Parse Summary";
+    public static final String CHOOSE_SHOW_TITLE = "Choose Show";
+    public static final String CHOOSE_SHOW_MENU_TEXT = "Choose Show...";
+    public static final String EDIT_MATCHING_RULE_MENU_TEXT = "Edit Matching Rule...";
     public static final String EXIT_LABEL = "Exit";
     public static final String OK_LABEL = "OK";
     public static final String PREFERENCES_LABEL = "Preferences";

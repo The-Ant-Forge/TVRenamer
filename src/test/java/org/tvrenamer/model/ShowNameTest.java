@@ -318,6 +318,95 @@ public class ShowNameTest {
     }
 
     @Nested
+    @DisplayName("Re-choosing a matched show")
+    class RechooseInvalidation {
+
+        @Test
+        @DisplayName("a cached match that is not the pinned series is forgotten")
+        void forgetsMatchThatDiffersFromPin() {
+            String name = uniqueName("Westmark Academy");
+            ShowName sn = ShowName.mapShowName(name);
+            sn.addShowOption("7001", "Westmark Academy");
+            sn.selectShowOption(); // caches series 7001
+            assertEquals("7001", sn.getMatchedShow().getIdString());
+
+            // The user now picks series 7002 for this name.
+            assertTrue(sn.forgetMatchIfNotPinned("7002"),
+                "a stale match must be reported as cleared");
+            assertNull(sn.getMatchedShow(),
+                "stale match must be gone so the re-match asks the provider");
+            assertTrue(sn.needsQuery());
+        }
+
+        @Test
+        @DisplayName("a cached match that is the pinned series is kept")
+        void keepsMatchThatIsPinned() {
+            String name = uniqueName("Westmark Academy Kept");
+            ShowName sn = ShowName.mapShowName(name);
+            sn.addShowOption("7101", "Westmark Academy");
+            sn.selectShowOption();
+            ShowOption matched = sn.getMatchedShow();
+
+            assertFalse(sn.forgetMatchIfNotPinned("7101"));
+            assertSame(matched, sn.getMatchedShow());
+        }
+
+        @Test
+        @DisplayName("no pin, or nothing cached, leaves the cache alone")
+        void noPinOrNoMatchIsNoOp() {
+            String name = uniqueName("Solar Drift Unpinned");
+            ShowName sn = ShowName.mapShowName(name);
+            assertFalse(sn.forgetMatchIfNotPinned("7201"), "nothing cached");
+
+            sn.addShowOption("7202", "Solar Drift");
+            sn.selectShowOption();
+            ShowOption matched = sn.getMatchedShow();
+            assertFalse(sn.forgetMatchIfNotPinned(null));
+            assertFalse(sn.forgetMatchIfNotPinned(" "));
+            assertSame(matched, sn.getMatchedShow());
+        }
+
+        @Test
+        @DisplayName("a cached failure is forgotten once a show is pinned")
+        void forgetsFailureWhenPinned() {
+            String name = uniqueName("Solar Drift Failed");
+            ShowName sn = ShowName.mapShowName(name);
+            sn.getFailedShow(null);
+
+            assertTrue(sn.forgetMatchIfNotPinned("7301"));
+            assertNull(sn.getMatchedShow());
+        }
+
+        @Test
+        @DisplayName("ShowStore.forgetLookupIfNotPinned clears a stale match by name")
+        void showStoreForgetsStaleMatch() {
+            String name = uniqueName("Westmark Store");
+            ShowName sn = ShowName.mapShowName(name);
+            sn.addShowOption("7401", "Westmark Academy");
+            sn.selectShowOption();
+
+            ShowStore.forgetLookupIfNotPinned(name, "7402");
+
+            assertNull(sn.getMatchedShow());
+            assertDoesNotThrow(() -> ShowStore.forgetLookupIfNotPinned(null, "1"));
+        }
+
+        @Test
+        @DisplayName("searchOnly ShowName is not the cached instance")
+        void searchOnlyIsDetached() {
+            String name = uniqueName("Detached Search");
+            ShowName cached = ShowName.mapShowName(name);
+            ShowName search = ShowName.searchOnly(name);
+            assertNotSame(cached, search);
+            assertEquals(cached.getQueryString(), search.getQueryString());
+
+            search.addShowOption("7501", "Detached Search");
+            assertFalse(cached.hasShowOptions(),
+                "options found by a one-off search must not leak into the cached name");
+        }
+    }
+
+    @Nested
     @DisplayName("Listener integration")
     class ListenerIntegration {
 

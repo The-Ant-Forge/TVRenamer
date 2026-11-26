@@ -1354,6 +1354,51 @@ Completes the code improvement opportunities document (all 24 items done).
     Bounding the walk at the folder the user added would clean more, but `FileMover`
     does not know that root today.
 
+### 76) Right-click menu: Choose Show and Edit Matching Rule
+- **Why:** A row that matched the wrong show could only be fixed by typing an override
+  or a series ID into Preferences by hand. The "click to set Hint" link only appeared on
+  unfound rows, and "Hint" meant a matching rule while the show chooser was elsewhere.
+- **Where:** `ResultsTable` (`setupRowContextMenu`, `chooseShowForItems`,
+  `applyShowSelections`, `openMatchingRule`, `rematchRows`), `ShowStore`
+  (`searchCandidates`, `forgetLookupIfNotPinned`), `ShowName` (`searchOnly`,
+  `forgetMatchIfNotPinned`), `ShowSelectionEvaluator.rankOptions`,
+  `BatchShowDisambiguationDialog`, `PreferencesDialog.open(int, String, String)`,
+  `help/show-matching.html`, `help/preferences.html`, `ShowNameTest`,
+  `ShowSelectionEvaluatorTest`.
+- **What we did:**
+  - Right-clicking the table offers **Choose Show...** (searches the provider again and
+    opens the Select Shows dialog with every result, best first; several selected rows
+    give one dialog, one entry per show name) and **Edit Matching Rule...** (Preferences >
+    Matching with the override "Extracted show" and the disambiguation "Query string"
+    pre-filled from the row, so the user sees what was extracted and searched for;
+    "Replace with" starts as the current name, selected, ready to edit or type over).
+  - Every route into Matching from the main window (the menu, and Choose Show finding
+    nothing) goes through one helper and fills both fields. The query string is the
+    override-applied name, which is what a disambiguation pin is keyed on.
+  - When a search finds nothing, a message says so and offers to open Matching.
+  - The unfound-row link now reads "add a rule in Preferences > Matching" and opens
+    Matching directly. That row's search already came back empty, so offering to choose
+    from a fresh search would only fail again.
+  - Fixed: the query-string normalisation split every CamelCaps word, so a name already
+    written with spaces, such as "Solar Drift StarBase", was searched as "solar drift star
+    base" and the provider found nothing. The split now applies only to run-together names
+    with no spaces, dots, underscores or hyphens ("LoreBusters"). `StringUtils`
+    (`replacePunctuation`), `StringUtilsTest`. A remembered show choice saved under the old
+    split query string no longer matches and will be asked again.
+  - The Select Shows dialog says a choice applies to every file with that show name and
+    is remembered under Preferences > Matching.
+  - Fixed: re-choosing a show that had already matched did nothing for the rest of the
+    session, because the re-match replayed the cached match. A cached match that is not
+    the pinned series is now dropped before re-matching. This also fixes changing a pin
+    by hand in Preferences.
+- **Notes:**
+  - The drop-down and link in the Proposed File Path cell take their own right-clicks,
+    so the menu appears when right-clicking elsewhere on the row (the file name).
+  - The search uses a detached `ShowName`, so it cannot disturb a lookup in flight for
+    the same name.
+  - The dialog still lists at most 5 results per show.
+  - Replaced a real show name in the "Query string" tooltip example.
+
 ---
 
 ## Related records

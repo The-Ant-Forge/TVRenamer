@@ -166,6 +166,30 @@ public class ShowName {
         }
 
         /**
+         * If the cached match for this QueryString disagrees with the series
+         * the user has pinned for it, discard it so a subsequent lookup
+         * re-queries the provider and honours the pin.  A cached failure also
+         * counts as disagreeing.  A match that already is the pinned series is
+         * kept.
+         *
+         * @param pinnedId the series id pinned for this query string; may be null
+         * @return true if a cached match was cleared; false otherwise
+         */
+        synchronized boolean forgetIfNotPinned(final String pinnedId) {
+            if (pinnedId == null || pinnedId.isBlank() || matchedShow == null) {
+                return false;
+            }
+            if (
+                !matchedShow.isFailedShow() &&
+                pinnedId.equals(matchedShow.getIdString())
+            ) {
+                return false;
+            }
+            matchedShow = null;
+            return true;
+        }
+
+        /**
          * Factory-style method to obtain a QueryString.  If an object has already been created
          * for the query string we need for the found name, re-use it.
          *
@@ -244,6 +268,19 @@ public class ShowName {
                 ", so created one instead"
         );
         return SHOW_NAMES.computeIfAbsent(filenameShow, ShowName::new);
+    }
+
+    /**
+     * Create a ShowName that is NOT registered in the cache, for a one-off
+     * provider search (the "Choose Show..." action).  Its show options are its
+     * own, so searching with it cannot disturb the options list of the cached
+     * ShowName while a background lookup for the same name is filling it.
+     *
+     * @param filenameShow the show name to search for
+     * @return a new, unregistered ShowName
+     */
+    public static ShowName searchOnly(String filenameShow) {
+        return new ShowName(filenameShow);
     }
 
     /*
@@ -533,6 +570,22 @@ public class ShowName {
     public boolean forgetFailedLookup() {
         synchronized (queryString) {
             return queryString.forgetIfFailed();
+        }
+    }
+
+    /**
+     * Forget this ShowName's cached match when it is not the series the user
+     * has pinned for its query string (see {@link QueryString#forgetIfNotPinned}).
+     * Without this, re-pinning a show that already matched would be a no-op
+     * for the rest of the session: the re-match would replay the old match
+     * from the cache instead of asking the provider.
+     *
+     * @param pinnedId the series id pinned for this query string; may be null
+     * @return true if a cached match was cleared; false otherwise
+     */
+    public boolean forgetMatchIfNotPinned(final String pinnedId) {
+        synchronized (queryString) {
+            return queryString.forgetIfNotPinned(pinnedId);
         }
     }
 

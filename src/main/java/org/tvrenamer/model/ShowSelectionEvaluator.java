@@ -476,7 +476,27 @@ public final class ShowSelectionEvaluator {
      * Score all candidates by fuzzy similarity. Auto-select if the best score
      * exceeds the threshold with sufficient gap to the runner-up; otherwise AMBIGUOUS.
      */
-    private static Decision fuzzyMatchOrAmbiguous(
+    /**
+     * Score every candidate against the extracted name and sort best-first,
+     * whatever the auto-resolve decision would be.  Used to rank the list
+     * when the user asks to choose a show themselves.
+     *
+     * @param extractedName the show name to compare candidates against
+     * @param options the provider candidates (null entries are skipped)
+     * @return scored candidates, best first; empty if there are none
+     */
+    public static List<ScoredOption> rankOptions(
+        final String extractedName,
+        final List<ShowOption> options
+    ) {
+        if (options == null || options.isEmpty()) {
+            return new ArrayList<>();
+        }
+        final String extracted = safeTrim(extractedName);
+        return scoreAll(options, extracted, safeNormalize(extracted));
+    }
+
+    private static List<ScoredOption> scoreAll(
         final List<ShowOption> options,
         final String extracted,
         final String extractedNormalized
@@ -494,6 +514,16 @@ public final class ShowSelectionEvaluator {
             scored.add(new ScoredOption(opt, score));
         }
         Collections.sort(scored);
+        return scored;
+    }
+
+    private static Decision fuzzyMatchOrAmbiguous(
+        final List<ShowOption> options,
+        final String extracted,
+        final String extractedNormalized
+    ) {
+        List<ScoredOption> scored =
+            scoreAll(options, extracted, extractedNormalized);
 
         if (!scored.isEmpty()) {
             double bestScore = scored.get(0).score();
